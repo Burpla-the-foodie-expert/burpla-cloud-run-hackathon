@@ -1,6 +1,10 @@
 import os
 import requests
 from typing import List
+from pydantic import BaseModel
+# from dotenv import load_dotenv
+
+# load_dotenv(override=True)
 
 def google_places_text_search(text_query: str) -> dict:
     """
@@ -26,6 +30,37 @@ def google_places_text_search(text_query: str) -> dict:
         return result
     except requests.exceptions.RequestException as e:
         return {"error": f"Places API Request failed: {e}", "type": "recommendation"}
+
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+# 1. Nested Model: Defines a single voting option (a restaurant)
+class VoteOption(BaseModel):
+    """Represents a single restaurant option in the vote card."""
+    restaurant_id: str
+    restaurant_name: str
+    description: str
+    image: Optional[str] = Field(default="")
+    review: str
+    number_of_vote: int
+    map: str
+
+# 2. Nested Model: Defines the content structure of the vote_card type
+class Content(BaseModel):
+    """The content payload specific to the 'vote_card' type."""
+    text: str
+    title: str
+    vote_options: List[VoteOption]
+
+# 3. Main Model: The complete message structure
+class VoteCard(BaseModel):
+    """The complete message structure for a 'vote_card'."""
+    message_id: str = Field(alias="message_id")
+    sender_id: int = Field(alias="sender_id")
+    sender_name: str = Field(alias="sender_name")
+    type: str = Field(default="vote_card", const=True) # Assuming 'vote_card' is a fixed value
+    content: Content
+    
 
 def generate_vote(place_ids: List[str]) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -79,5 +114,6 @@ def generate_vote(place_ids: List[str]) -> dict:
         "type": "vote",
         "options": vote_options
     }
+
 
 
