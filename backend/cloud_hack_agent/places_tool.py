@@ -2,9 +2,10 @@ import os
 import requests
 from typing import List
 from pydantic import BaseModel
-# from dotenv import load_dotenv
 
-# load_dotenv(override=True)
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 def google_places_text_search(text_query: str) -> dict:
     """
@@ -58,7 +59,7 @@ class VoteCard(BaseModel):
     message_id: str = Field(alias="message_id")
     sender_id: int = Field(alias="sender_id")
     sender_name: str = Field(alias="sender_name")
-    type: str = Field(default="vote_card", const=True) # Assuming 'vote_card' is a fixed value
+    type: str = Field(default="vote_card") # Assuming 'vote_card' is a fixed value
     content: Content
     
 

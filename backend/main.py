@@ -131,7 +131,7 @@ async def get_conversation_by_id(request: ConvoRequest):
 async def send_user_message(message: UserMessage):
     """Send message to agent and wait for response"""
     user_message_id = str(uuid.uuid4())
-    messages_db[user_message_id] = message.dict()
+    messages_db[user_message_id] = message.model_dump()
 
     if message.is_to_agent or not message.is_to_agent:
         try:
@@ -148,7 +148,7 @@ async def send_user_message(message: UserMessage):
                 id=str(uuid.uuid4())
             )
 
-            messages_db[agent_message.id] = agent_message.dict()
+            messages_db[agent_message.id] = agent_message.model_dump()
             return agent_message
 
         except Exception as e:
@@ -158,7 +158,7 @@ async def send_user_message(message: UserMessage):
                 message=f"Error: {str(e)}",
                 id=str(uuid.uuid4())
             )
-            messages_db[error_message.id] = error_message.dict()
+            messages_db[error_message.id] = error_message.model_dump()
             return error_message
     else:
         return AgentMessage(
