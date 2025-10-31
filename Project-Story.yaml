@@ -1,17 +1,17 @@
 ## Inspiration
-Decision fatigue is real—especially for “what do we eat?” moments. We wanted a friendly agent that removes friction for both solo diners and groups: it listens for context, proposes fair options, and handles the coordination. We also add a light “safety” angle with leave‑now reminders and optional trip‑home status so friends can look out for each other.
+Decision fatigue is real—especially for “what do we eat?” moments. Burpla is a friendly agent that listens to the chat, synthesizes a few great options, and turns that into an instant, fair vote so groups decide fast. It balances distance and ETA so no one is stuck with a long drive. Safety (leave‑now reminders and optional “got home” status) is a nice add‑on, not the core.
 Fun launch video concept:
 - A: “I’m here—how far are you?” (A’s at the restaurant)
 - B: “Stuck in traffic, be right there.” (…B is still in bed)
-After dinner: everyone’s a bit tipsy—Burpla pings “Time to head out” and friends can see each other get home safely.
+Group stuck deciding? Burpla spins up a quick poll from the chat—three taps later, decision made. After dinner: Burpla pings “Time to head out,” and friends can optionally mark that they got home safely.
 
 ## What it does
 - Understands chat context and @mentions to activate the agent
-- Suggests restaurants with rich details: rating, price, distance, ETA, open hours
-- Finds fair meeting spots for groups via midpoint and ETA balancing
-- Runs instant polls; records votes; announces winners
-- Sends leave‑now reminders based on live ETA
+- Synthesizes options from conversation + preferences + Places data
+- Runs instant polls; records votes; announces winners (the core flow)
+- Finds fair meeting spots via midpoint and ETA balancing
 - Shares directions and a map view
+- Sends leave‑now reminders based on live ETA
 - Optional “I’m on my way / got home” status for group safety
 
 ## How we built it
@@ -26,9 +26,9 @@ After dinner: everyone’s a bit tipsy—Burpla pings “Time to head out” and
 # Architecture at a glance
 - React client → HTTPS → Cloud Run service (API + ADK agent)
 - Agent tools:
+    - PollOrchestrator → create/vote/close + winner selection (Suggestion → Poll → Winner)
     - PlacesSearchTool → Google Places Text Search
     - DistanceMatrixTool → Google Distance Matrix
-    - PollOrchestrator → create/vote/close + winner selection
     - ReminderScheduler → “leave by” notifications
 - Storage: groups, polls, saved places, and user prefs
 - Map pane mirrors current results; markers filter with chips like “Open now”, “Rating 4+”
@@ -40,10 +40,10 @@ We balance options by both distance and time:
 - Tie‑breakers: rating, open status, and user preferences
 
 ## Challenges we ran into
+- Designing a poll flow that’s fast, legible, and hard to game
 - De‑duping places across queries and keeping results stable for fair voting
 - Handling partial permissions (no location, limited history) while remaining helpful
 - Cost/latency trade‑offs for multiple tool calls (batching Distance Matrix)
-- Designing a poll flow that’s fast, legible, and hard to game
 
 ## Accomplishments that we're proud of
 
