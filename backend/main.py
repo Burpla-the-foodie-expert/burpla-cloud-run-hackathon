@@ -11,7 +11,11 @@ import google.genai as genai
 
 load_dotenv(dotenv_path="cloud_hack_agent/.env", override=True)
 
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+api_key = os.getenv("GOOGLE_API_KEY")
+if not api_key:
+    raise ValueError("GOOGLE_API_KEY not found in environment. Check cloud_hack_agent/.env file.")
+
+client = genai.Client(api_key=api_key)
 
 app = FastAPI(
     title="FastAPI Template",
@@ -68,7 +72,7 @@ class UserMessage(BaseModel):
     name: str = Field(description="User name", examples=["Huy Bui"])
     message: str = Field(description="Message text", examples=["Find me Italian restaurants in Houston 77083"])
     id: str = Field(default="", description="Message ID (auto-generated)")
-    is_to_agent: Optional[bool] = Field(default=True, description="Send to AI agent")
+    is_to_agent: Optional[bool] = Field(default=True, description="If true, send to AI agent, otherwise, send to human")
 
 
 class AgentMessage(BaseModel):
@@ -127,7 +131,7 @@ async def get_conversation_by_id(request: ConvoRequest):
 async def send_user_message(message: UserMessage):
     """Send message to agent and wait for response"""
     user_message_id = str(uuid.uuid4())
-    messages_db[user_message_id] = message.dict()
+    messages_db[user_message_id] = message.model_dump()
 
     if message.is_to_agent or not message.is_to_agent:
         try:
@@ -135,7 +139,6 @@ async def send_user_message(message: UserMessage):
                 model='gemini-2.0-flash-exp',
                 contents=message.message
             )
-
             agent_response_text = response.text
 
             agent_message = AgentMessage(
@@ -145,7 +148,7 @@ async def send_user_message(message: UserMessage):
                 id=str(uuid.uuid4())
             )
 
-            messages_db[agent_message.id] = agent_message.dict()
+            messages_db[agent_message.id] = agent_message.model_dump()
             return agent_message
 
         except Exception as e:
@@ -155,7 +158,7 @@ async def send_user_message(message: UserMessage):
                 message=f"Error: {str(e)}",
                 id=str(uuid.uuid4())
             )
-            messages_db[error_message.id] = error_message.dict()
+            messages_db[error_message.id] = error_message.model_dump()
             return error_message
     else:
         return AgentMessage(

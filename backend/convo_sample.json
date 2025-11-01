@@ -1,7 +1,7 @@
 [
       {
         "message_id": "msg_001",
-        "sender_id": "1",
+        "sender_id": 1,
         "sender_name": "Huy Bui",
         "type": "text",
         "content": {
@@ -10,7 +10,7 @@
       },
       {
         "message_id": "msg_002",
-        "sender_id": "system",
+        "sender_id": 0,
         "sender_name": "Burpla",
         "type": "text",
         "content": {
@@ -19,7 +19,7 @@
       },
       {
         "message_id": "msg_003",
-        "sender_id": "2",
+        "sender_id": 2,
         "sender_name": "Weber",
         "type": "text",
         "content": {
@@ -28,7 +28,7 @@
       },
       {
         "message_id": "msg_004",
-        "sender_id": "3",
+        "sender_id": 3,
         "sender_name": "Huy Nguyen",
         "type": "text",
         "content": {
@@ -37,7 +37,7 @@
       },
       {
         "message_id": "msg_005",
-        "sender_id": "1",
+        "sender_id": 1,
         "sender_name": "Huy Bui",
         "type": "text",
         "content": {
@@ -46,7 +46,7 @@
       },
       {
         "message_id": "msg_006",
-        "sender_id": "system",
+        "sender_id": 0,
         "sender_name": "Burpla",
         "type": "vote_card",
         "content": {
@@ -89,7 +89,7 @@
       },
       {
         "message_id": "msg_007",
-        "sender_id": "1",
+        "sender_id": 1,
         "sender_name": "Huy Bui",
         "type": "text",
         "content": {
@@ -98,7 +98,7 @@
       },
       {
         "message_id": "msg_008",
-        "sender_id": "2",
+        "sender_id": 2,
         "sender_name": "Weber",
         "type": "text",
         "content": {
@@ -107,7 +107,7 @@
       },
       {
         "message_id": "msg_009",
-        "sender_id": "3",
+        "sender_id": 3,
         "sender_name": "Huy Nguyen",
         "type": "text",
         "content": {
@@ -116,7 +116,7 @@
       },
       {
         "message_id": "msg_010",
-        "sender_id": "system",
+        "sender_id": 0,
         "sender_name": "Burpla",
         "type": "reminder_card",
         "content": {
@@ -134,7 +134,7 @@
       },
       {
         "message_id": "msg_011",
-        "sender_id": "system",
+        "sender_id": 0,
         "sender_name": "Burpla",
         "type": "end_card",
         "content": {
