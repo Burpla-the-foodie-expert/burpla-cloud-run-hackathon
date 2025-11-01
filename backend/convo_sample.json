@@ -80,11 +80,7 @@
               "number_of_vote": 0,
               "map": "https://maps.app.goo.gl/HTownBurgers"
             }
-          ],
-          "button": {
-            "label": "Submit Vote",
-            "action": "submit_vote"
-          }
+          ]
         }
       },
       {
@@ -125,11 +121,7 @@
           "time_selection": "7:00 PM CST",
           "date_selection": "Friday, November 7th, 2025",
           "list_of_people": ["Huy Bui", "Weber", "Huy Nguyen"],
-          "additional_notes": "A table for 3 has been tentatively reserved.",
-          "button": {
-            "label": "Set Reminder",
-            "action": "finalize_reminder"
-          }
+          "additional_notes": "A table for 3 has been tentatively reserved."
         }
       },
       {

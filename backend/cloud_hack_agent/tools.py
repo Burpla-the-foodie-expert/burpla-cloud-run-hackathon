@@ -1,6 +1,7 @@
 import os
 import requests
 from typing import List
+import uuid
 from pydantic import BaseModel
 
 from dotenv import load_dotenv
@@ -8,9 +9,6 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 def google_places_text_search(text_query: str) -> dict:
-    """
-    
-    """
     api_key = os.getenv("GOOGLE_API_KEY")
     api_url = "https://places.googleapis.com/v1/places:searchText"
     field_mask = "places.id,places.displayName,places.formattedAddress,places.priceLevel,places.rating,places.userRatingCount,places.types"
@@ -32,38 +30,11 @@ def google_places_text_search(text_query: str) -> dict:
     except requests.exceptions.RequestException as e:
         return {"error": f"Places API Request failed: {e}", "type": "recommendation"}
 
-from pydantic import BaseModel, Field
-from typing import List, Optional
 
-# 1. Nested Model: Defines a single voting option (a restaurant)
-class VoteOption(BaseModel):
-    """Represents a single restaurant option in the vote card."""
-    restaurant_id: str
-    restaurant_name: str
-    description: str
-    image: Optional[str] = Field(default="")
-    review: str
-    number_of_vote: int
-    map: str
+def generate_vote(place_ids: List[str], tool_context=None) -> dict:
+    if tool_context is not None:
+        tool_context.actions.skip_summarization = True
 
-# 2. Nested Model: Defines the content structure of the vote_card type
-class Content(BaseModel):
-    """The content payload specific to the 'vote_card' type."""
-    text: str
-    title: str
-    vote_options: List[VoteOption]
-
-# 3. Main Model: The complete message structure
-class VoteCard(BaseModel):
-    """The complete message structure for a 'vote_card'."""
-    message_id: str = Field(alias="message_id")
-    sender_id: int = Field(alias="sender_id")
-    sender_name: str = Field(alias="sender_name")
-    type: str = Field(default="vote_card") # Assuming 'vote_card' is a fixed value
-    content: Content
-    
-
-def generate_vote(place_ids: List[str]) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY")
     field_mask = "id,displayName,formattedAddress,location,rating,userRatingCount,photos,googleMapsUri,reviews"
 
@@ -89,19 +60,14 @@ def generate_vote(place_ids: List[str]) -> dict:
                 if photo_name:
                     photo_uri = f"https://places.googleapis.com/v1/{photo_name}/media?key={api_key}&maxHeightPx=400&maxWidthPx=400"
 
-            review_text = None
-            if place.get("reviews"):
-                review_text = place["reviews"][0].get("text", {}).get("text")
-
             vote_option = {
-                "name": place.get("displayName", {}).get("text"),
-                "location": place.get("formattedAddress"),
-                "rating": place.get("rating"),
-                "userRatingCount": place.get("userRatingCount"),
-                "photoUri": photo_uri,
-                "review": review_text,
-                "hyperlink": place.get("googleMapsUri"),
-                "placeId": place.get("id")
+                'restaurant_id': place_id,
+                'restaurant_name': place.get("displayName", {}).get("text"),
+                'description': place.get("formattedAddress"),
+                'image': photo_uri or "",
+                'review': f"{place.get('rating', 'N/A')}/5.0 ({place.get('userRatingCount', 0)} reviews)",
+                'number_of_vote': 0,
+                'map': place.get("googleMapsUri")
             }
             vote_options.append(vote_option)
 
@@ -110,11 +76,19 @@ def generate_vote(place_ids: List[str]) -> dict:
                 "error": f"Failed to fetch details for {place_id}: {e}",
                 "placeId": place_id
             })
-
-    return {
-        "type": "vote",
-        "options": vote_options
+    
+    res = {
+        'message_id': f"msg-{str(uuid.uuid4())}",
+        "sender_name": "Burpla",
+        "type": "vote_card",
+        "content": {
+            'text': "Here is the recommendation based on the conversation.",
+            "title": "Options to eat",
+            'vote_options': vote_options
+        }
     }
+
+    return res
 
 
 

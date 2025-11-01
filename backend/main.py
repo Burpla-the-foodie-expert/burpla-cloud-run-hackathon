@@ -6,8 +6,9 @@ import os
 import json
 from dotenv import load_dotenv
 import uuid
-from cloud_hack_agent.places_tool import google_places_text_search, generate_vote
+from cloud_hack_agent import vote_agent
 import google.genai as genai
+from google.genai import types
 
 load_dotenv(dotenv_path="cloud_hack_agent/.env", override=True)
 
@@ -135,11 +136,15 @@ async def send_user_message(message: UserMessage):
 
     if message.is_to_agent or not message.is_to_agent:
         try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash-exp',
-                contents=message.message
-            )
-            agent_response_text = response.text
+            if vote_agent.should_handle(message.message):
+                vote_result = vote_agent.execute(message.message)
+                agent_response_text = json.dumps(vote_result)
+            else:
+                response = client.models.generate_content(
+                    model='gemini-2.0-flash-exp',
+                    contents=message.message
+                )
+                agent_response_text = response.text
 
             agent_message = AgentMessage(
                 user_id=0,
