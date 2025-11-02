@@ -31,12 +31,12 @@ root_agent = Agent(
             1. 'generate_vote_agent': Handles generating detailed voting options based on place IDs. 
 
         Analyze the user's query. 
-        If it's a request for finding places to eat, use 'google_places_text_search'. 
-        If it's a distance calculation request, use 'distance_matrix'. 
+        If it's a request for finding places to eat, use 'google_places_text_search'. Also include some details about the restaurants found, such as name, description, rating, and number of reviews.
+        If it's a distance calculation request, use 'distance_matrix'. Be sure to provide clear information about the distance and estimated travel time.
         If the user want to make a vote, delegate to 'generate_vote_agent'.
         
         For anything else, respond appropriately or state you cannot handle it
-    """,
+        """,
     tools=[google_places_text_search, distance_matrix], 
     sub_agents=[generate_vote_agent]
 )
