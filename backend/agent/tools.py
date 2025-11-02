@@ -1,9 +1,8 @@
+import os, requests, uuid
 import googlemaps
 from dotenv import load_dotenv
-import os, requests, uuid
 from typing import List
-from pydantic import BaseModel
-from dotenv import load_dotenv
+
 load_dotenv(override=True)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
@@ -35,7 +34,11 @@ def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> Non
 
 def google_places_text_search(text_query: str) -> dict:
     """
-    
+        Searches for places using Google Places API based on a text query.
+        Args:
+            text_query (str): The text query to search for places (e.g., "best pizza in New York").
+        Returns:
+            dict: A dictionary containing the search results from the Places API.
     """
 
     api_url = "https://places.googleapis.com/v1/places:searchText"
@@ -58,10 +61,14 @@ def google_places_text_search(text_query: str) -> dict:
         return {"error": f"Places API Request failed: {e}", "type": "recommendation"}
 
 
-def generate_vote(place_ids: List[str], tool_context=None) -> dict:
-    if tool_context is not None:
-        tool_context.actions.skip_summarization = True
-
+def generate_vote(place_ids: List[str]) -> dict:
+    """
+        Generates voting options based on a list of place IDs using Google Places API.
+        Args:
+            place_ids (List[str]): A list of place IDs to generate voting options for.
+        Returns:
+            dict: A dictionary containing the voting options.
+    """
     api_key = os.getenv("GOOGLE_API_KEY")
     field_mask = "id,displayName,formattedAddress,location,rating,userRatingCount,photos,googleMapsUri,reviews"
 
@@ -108,14 +115,11 @@ def generate_vote(place_ids: List[str], tool_context=None) -> dict:
         'message_id': f"msg-{str(uuid.uuid4())}",
         "sender_name": "Burpla",
         "type": "vote_card",
-        "content": {
-            'text': "Here is the recommendation based on the conversation.",
-            "title": "Options to eat",
-            'vote_options': vote_options
-        }
+        'vote_options': vote_options
     }
 
     return res
+
 
 
 

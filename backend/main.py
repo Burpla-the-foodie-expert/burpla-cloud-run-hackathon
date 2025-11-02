@@ -6,7 +6,8 @@ import os
 import json
 from dotenv import load_dotenv
 import uuid
-from cloud_hack_agent import vote_agent
+# from cloud_hack_agent import vote_agent
+from agent.agent import run_conversation
 import google.genai as genai
 from google.genai import types
 
@@ -31,8 +32,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-messages_db = {}
 
 with open('convo_sample.json') as f:
     sample_conversation_content = json.load(f)
@@ -69,19 +68,17 @@ class Conversation(BaseModel):
 
 
 class UserMessage(BaseModel):
-    user_id: int = Field(description="User ID", examples=[1])
-    name: str = Field(description="User name", examples=["Huy Bui"])
+    user_id: int = Field(default=1, description="User ID")
     message: str = Field(description="Message text", examples=["Find me Italian restaurants in Houston 77083"])
-    id: str = Field(default="", description="Message ID (auto-generated)")
+    message_id: str = Field(default="something", description="Message ID (auto-generated)")
+    session_id : str = Field(default="something", description="Session ID (auto-generated)")
     is_to_agent: Optional[bool] = Field(default=True, description="If true, send to AI agent, otherwise, send to human")
-
 
 class AgentMessage(BaseModel):
     user_id: int = Field(default=0, description="Agent user ID")
     name: str = Field(default="Burpla", description="Agent name")
     message: str = Field(description="Agent response", examples=["I found 5 restaurants in Houston 77083!"])
-    id: str = Field(description="Message ID")
-
+    message_id: str = Field(description="Message ID")
 
 @app.get("/")
 async def root():
@@ -131,29 +128,20 @@ async def get_conversation_by_id(request: ConvoRequest):
 @app.post("/sent", response_model=AgentMessage)
 async def send_user_message(message: UserMessage):
     """Send message to agent and wait for response"""
-    user_message_id = str(uuid.uuid4())
-    messages_db[user_message_id] = message.model_dump()
-
-    if message.is_to_agent or not message.is_to_agent:
+    if message.is_to_agent:
+        message_id = str(uuid.uuid4())
         try:
-            if vote_agent.should_handle(message.message):
-                vote_result = vote_agent.execute(message.message)
-                agent_response_text = json.dumps(vote_result)
-            else:
-                response = client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
-                    contents=message.message
-                )
-                agent_response_text = response.text
-
+            query = message.message
+            user_id = str(message.user_id)
+            session_id = message.session_id
+            print(query)
+            response = await run_conversation(query, app_name = "burbla", user_id = user_id, session_id = session_id)
             agent_message = AgentMessage(
                 user_id=0,
                 name="Burpla",
-                message=agent_response_text,
-                id=str(uuid.uuid4())
+                message=response,
+                message_id=message_id
             )
-
-            messages_db[agent_message.id] = agent_message.model_dump()
             return agent_message
 
         except Exception as e:
@@ -161,16 +149,15 @@ async def send_user_message(message: UserMessage):
                 user_id=0,
                 name="Burpla",
                 message=f"Error: {str(e)}",
-                id=str(uuid.uuid4())
+                message_id=str(uuid.uuid4())
             )
-            messages_db[error_message.id] = error_message.model_dump()
             return error_message
     else:
         return AgentMessage(
             user_id=0,
             name="Burpla",
             message="Message received",
-            id=str(uuid.uuid4())
+            message_id=message.message_id
         )
 
 
