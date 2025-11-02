@@ -98,6 +98,15 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/cicd-test")
+async def cicd_test():
+    """A simple endpoint to verify CI/CD deployment success"""
+    return {
+        "message": "CI/CD pipeline test successful!",
+        "version": "1.0.0"
+    }
+
+
 @app.get("/init", response_model=ConversationList)
 async def get_all_conversations():
     """Retrieve all available conversations on application startup"""
