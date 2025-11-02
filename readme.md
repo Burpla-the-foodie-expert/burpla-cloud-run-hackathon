@@ -10,4 +10,4 @@ GOOGLE_API_KEY = PASTE_YOUR_ACTUAL_API_KEY_HERE
 Secrets:
 GCP_PROJECT_ID = burpla
 GCP_SA_EMAIL = github-actions-deployer@burpla.iam.gserviceaccount.com
-GCP_WIF_PROVIDER = projects/415080714475/locations/global/workloadIdentityPools/github-pool/providers/github-provider-id
+GCP_WIF_PROVIDER = projects/415080714475/locations/global/workloadIdentityPools/github-pool/providers/github-provider
