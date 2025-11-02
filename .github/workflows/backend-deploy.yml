@@ -37,4 +37,5 @@ jobs:
             --image "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/backend-service:sha-${{ github.sha }}" \
             --region "northamerica-northeast1" \
             --port 8000 \
+            --update-secrets=GOOGLE_API_KEY=google-api-key:latest \
             --allow-unauthenticated
