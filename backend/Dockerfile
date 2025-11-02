@@ -22,4 +22,4 @@ EXPOSE 8000
 
 # Command to run the application using uvicorn
 # Cloud Run will set the PORT environment variable. We default to 8000 for local testing.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
