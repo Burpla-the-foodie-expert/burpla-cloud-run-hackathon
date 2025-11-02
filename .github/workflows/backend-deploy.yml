@@ -12,7 +12,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: "read" # Rebuild 3
+      contents: "read" # Rebuild 4
       id-token: "write" # 這是 WIF 認證所必需的權限
 
     steps:
