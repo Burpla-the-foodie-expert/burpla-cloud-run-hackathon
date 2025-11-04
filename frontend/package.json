@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.50",
+    "@google/generative-ai": "^0.21.0",
     "ai": "^3.0.0",
     "autoprefixer": "^10.4.19",
     "clsx": "^2.1.0",

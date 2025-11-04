@@ -7,6 +7,12 @@ import { UserMessage } from "./user-message";
 import { BotMessage } from "./bot-message";
 import { InteractiveCard } from "./interactive-card";
 import type { InteractiveCardConfig } from "./interactive-card";
+import {
+  convertConvoMessagesToGroupChatMessages,
+  extractUsersFromConvoMessages,
+  type ConvoMessage,
+} from "@/lib/conversation-utils";
+import { getApiUrl } from "@/lib/api-config";
 
 function getAvatarColor(name: string) {
   const colors = [
@@ -62,6 +68,9 @@ interface GroupChatProps {
   userId: string;
   initialMessages?: Message[];
   initialUsers?: SessionUser[];
+  // Support for convo_sample.json format
+  convoData?: ConvoMessage[];
+  loadFromConvo?: boolean; // If true, will load and convert convo data
 }
 
 export function GroupChat({
@@ -71,18 +80,38 @@ export function GroupChat({
   userId,
   initialMessages,
   initialUsers,
+  convoData,
+  loadFromConvo = false,
 }: GroupChatProps) {
-  const [messages, setMessages] = useState<Message[]>(initialMessages || []);
+  // Initialize messages from either initialMessages or convoData
+  const initializeMessages = () => {
+    if (loadFromConvo && convoData) {
+      return convertConvoMessagesToGroupChatMessages(convoData);
+    }
+    return initialMessages || [];
+  };
+
+  const [messages, setMessages] = useState<Message[]>(initializeMessages());
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [lastMessageId, setLastMessageId] = useState<string | null>(null);
+
+  // Initialize users from either initialUsers or extracted from convoData
+  const initializeUsers = () => {
+    if (loadFromConvo && convoData) {
+      return extractUsersFromConvoMessages(convoData);
+    }
+    return initialUsers || [];
+  };
+
   const [sessionUsers, setSessionUsers] = useState<SessionUser[]>(
-    initialUsers || []
+    initializeUsers()
   );
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionIndex, setMentionIndex] = useState(-1);
   const [cursorPosition, setCursorPosition] = useState(0);
+  const [autoMentionBurpla, setAutoMentionBurpla] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
@@ -287,8 +316,20 @@ export function GroupChat({
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const messageContent = input.trim();
+    let messageContent = input.trim();
+
+    // Auto-prepend @burpla if checkbox is checked and not already mentioned
+    if (autoMentionBurpla && !mentionsBurpla(messageContent)) {
+      messageContent = `@burpla ${messageContent}`;
+    }
+
     const messageMentionsBurpla = mentionsBurpla(messageContent);
+
+    // Auto-check the checkbox if message mentions burpla (so user can continue the conversation)
+    if (messageMentionsBurpla) {
+      setAutoMentionBurpla(true);
+    }
+
     setInput("");
     setIsLoading(false);
     setShowMentions(false);
@@ -297,6 +338,22 @@ export function GroupChat({
       const messageId = `${Date.now()}-${Math.random()
         .toString(36)
         .substring(2, 9)}`;
+      const timestamp = Date.now();
+
+      // Create user message immediately (optimistic update)
+      const userMessage: Message = {
+        id: messageId,
+        userId,
+        userName,
+        content: messageContent,
+        role: "user",
+        timestamp,
+      };
+
+      // Add user message to local state immediately
+      setMessages((prev) =>
+        [...prev, userMessage].sort((a, b) => a.timestamp - b.timestamp)
+      );
 
       // Send message to session
       const sendResponse = await fetch("/api/sessions", {
@@ -315,201 +372,87 @@ export function GroupChat({
       if (sendResponse.ok && messageMentionsBurpla) {
         setIsLoading(true);
 
-        // Get recent messages for context
-        const recentMessages = messages.slice(-10).map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
+        // Call backend Python API /sent endpoint
+        try {
+          // Use the API config helper to get the correct backend URL
+          const backendUrl = getApiUrl("/sent");
+          console.log("[GroupChat] Calling backend API:", backendUrl);
 
-        // Send to AI endpoint
-        const aiResponse = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [
-              ...recentMessages,
-              {
-                role: "user",
-                content: messageContent,
-              },
-            ],
-            ...(userLocation && {
-              location: {
-                latitude: userLocation.lat,
-                longitude: userLocation.lng,
-              },
+          const sentResponse = await fetch(backendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: parseInt(userId) || 1,
+              name: userName,
+              message: messageContent,
+              id: messageId,
+              is_to_agent: true,
+              // Backend doesn't support location/sessionId yet, but we'll include them for future compatibility
+              // location: userLocation
+              //   ? { lat: userLocation.lat, lng: userLocation.lng }
+              //   : undefined,
             }),
-            userName,
-          }),
-        });
+          });
 
-        if (aiResponse.ok) {
-          // Handle AI streaming response
-          const reader = aiResponse.body?.getReader();
-          const decoder = new TextDecoder();
-          let aiMessageContent = "";
-          let buffer = "";
-          const aiMessageId = `ai-${Date.now()}`;
+          if (sentResponse.ok) {
+            const sentData = await sentResponse.json();
 
-          if (reader) {
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-                for (const line of lines) {
-                  if (!line.trim()) continue;
-
-                  try {
-                    // AI SDK format: "0:{"type":"text-delta","textDelta":"..."}"
-                    // or "0:{"type":"text","text":"..."}"
-                    if (line.startsWith("0:")) {
-                      const jsonStr = line.substring(2).trim();
-                      if (jsonStr) {
-                        const data = JSON.parse(jsonStr);
-                        if (data.type === "text-delta" && data.textDelta) {
-                          aiMessageContent += data.textDelta;
-                        } else if (data.type === "text" && data.text) {
-                          aiMessageContent = data.text; // Full text replaces content
-                        } else if (data.delta) {
-                          // Some formats use delta directly
-                          aiMessageContent += data.delta;
-                        }
-                      }
-                    }
-                    // Direct JSON format
-                    else if (line.startsWith("{") && line.endsWith("}")) {
-                      const data = JSON.parse(line);
-                      if (data.type === "text-delta" && data.textDelta) {
-                        aiMessageContent += data.textDelta;
-                      } else if (data.type === "text" && data.text) {
-                        aiMessageContent = data.text;
-                      } else if (data.delta) {
-                        aiMessageContent += data.delta;
-                      } else if (data.content) {
-                        aiMessageContent += data.content;
-                      }
-                    }
-                  } catch (e) {
-                    // Skip invalid JSON - might be partial chunk or other format
-                    console.debug(
-                      "Failed to parse line:",
-                      line.substring(0, 50),
-                      e
-                    );
-                  }
-                }
-
-                // Update AI message in real-time whenever content changes
-                if (aiMessageContent) {
-                  const aiMessage: Message = {
-                    id: aiMessageId,
-                    userId: "burpla",
-                    userName: "Burpla",
-                    content: aiMessageContent,
-                    role: "assistant",
-                    timestamp: Date.now(),
-                  };
-
-                  setMessages((prev) => {
-                    const filtered = prev.filter((m) => m.id !== aiMessageId);
-                    return [...filtered, aiMessage].sort(
-                      (a, b) => a.timestamp - b.timestamp
-                    );
-                  });
-                }
-              }
-
-              // Process any remaining buffer
-              if (buffer.trim()) {
-                try {
-                  if (buffer.startsWith("0:")) {
-                    const jsonStr = buffer.substring(2).trim();
-                    if (jsonStr) {
-                      const data = JSON.parse(jsonStr);
-                      if (data.type === "text-delta" && data.textDelta) {
-                        aiMessageContent += data.textDelta;
-                      } else if (data.type === "text" && data.text) {
-                        aiMessageContent = data.text;
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.debug("Failed to parse final buffer:", e);
-                }
-              }
-            } catch (streamError: any) {
-              console.error("Streaming error:", streamError);
-              // Display error as chat message
-              const errorMessage: Message = {
-                id: `error-${Date.now()}`,
-                userId: "burpla",
-                userName: "Burpla",
-                content: `Error: ${
-                  streamError.message ||
-                  "Failed to get AI response. Please try again."
-                }`,
-                role: "assistant",
-                timestamp: Date.now(),
-              };
-              setMessages((prev) =>
-                [...prev, errorMessage].sort(
-                  (a, b) => a.timestamp - b.timestamp
-                )
-              );
-            }
-          }
-
-          // Save final AI message to session after streaming completes
-          if (aiMessageContent.trim()) {
-            // Final update with complete message
-            const finalMessage: Message = {
-              id: aiMessageId,
+            // Create message with cardConfig if available
+            // Backend returns: { user_id, name, message, id }
+            const aiMessage: Message = {
+              id: sentData.id || messageId,
               userId: "burpla",
-              userName: "Burpla",
-              content: aiMessageContent,
+              userName: sentData.name || "Burpla",
+              content: sentData.message,
               role: "assistant",
               timestamp: Date.now(),
+              // Backend doesn't return cardConfig yet, but frontend can still handle it if added
+              cardConfig: sentData.cardConfig,
             };
 
-            setMessages((prev) => {
-              const filtered = prev.filter((m) => m.id !== aiMessageId);
-              return [...filtered, finalMessage].sort(
-                (a, b) => a.timestamp - b.timestamp
-              );
-            });
+            setMessages((prev) =>
+              [...prev, aiMessage].sort((a, b) => a.timestamp - b.timestamp)
+            );
 
-            // Save to session
-            await fetch("/api/sessions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "send",
-                sessionId,
-                userId: "burpla",
-                message: aiMessageContent,
-                messageId: aiMessageId,
-              }),
-            });
+            // Save to session (still using Next.js API for session management)
+            try {
+              await fetch("/api/sessions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "send",
+                  sessionId,
+                  userId: "burpla",
+                  message: sentData.message,
+                  messageId: sentData.id || messageId,
+                }),
+              });
+            } catch (sessionError) {
+              console.error("Failed to save to session:", sessionError);
+            }
+
+            setIsLoading(false);
+            return; // Exit early since we got response from backend
           } else {
-            // Remove empty loading message if no content was received
-            setMessages((prev) => prev.filter((m) => m.id !== aiMessageId));
+            // Backend returned an error
+            const errorData = await sentResponse
+              .json()
+              .catch(() => ({ error: "Unknown error" }));
+            throw new Error(
+              errorData.detail || errorData.error || "Backend API error"
+            );
           }
-        } else {
-          // Handle non-OK response (error from API)
-          const errorData = await aiResponse
-            .json()
-            .catch(() => ({ error: "Unknown error" }));
+        } catch (sentError: any) {
+          console.error("Failed to call backend /sent endpoint:", sentError);
+
+          // Display error message
           const errorMessage: Message = {
             id: `error-${Date.now()}`,
             userId: "burpla",
             userName: "Burpla",
             content: `Error: ${
-              errorData.error || "Failed to get AI response. Please try again."
+              sentError.message ||
+              "Failed to get AI response. Please check if the backend is running."
             }`,
             role: "assistant",
             timestamp: Date.now(),
@@ -517,7 +460,11 @@ export function GroupChat({
           setMessages((prev) =>
             [...prev, errorMessage].sort((a, b) => a.timestamp - b.timestamp)
           );
+          setIsLoading(false);
+          return;
         }
+
+        // Note: Backend doesn't support streaming, all responses come from /sent endpoint
       }
     } catch (error: any) {
       console.error("Failed to send message:", error);
@@ -670,6 +617,19 @@ export function GroupChat({
 
       {/* Input area */}
       <div className="px-4 pb-4">
+        {/* Auto-mention checkbox */}
+        <div className="mb-2 flex items-center gap-2">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-[#b9bbbe] hover:text-white transition-colors">
+            <input
+              type="checkbox"
+              checked={autoMentionBurpla}
+              onChange={(e) => setAutoMentionBurpla(e.target.checked)}
+              className="w-4 h-4 rounded border-[#40444b] bg-[#40444b] text-[#5865f2] focus:ring-2 focus:ring-[#5865f2] focus:ring-offset-2 focus:ring-offset-[#36393f] cursor-pointer"
+            />
+            <span>Continue mentioning @burpla</span>
+          </label>
+        </div>
+
         <form onSubmit={handleSubmit} className="relative">
           <div className="bg-[#40444b] rounded-lg px-4 py-3 flex items-center gap-3">
             <div className="flex-1 relative">

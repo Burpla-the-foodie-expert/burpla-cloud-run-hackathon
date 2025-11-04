@@ -27,6 +27,12 @@ wheels/
 venv/
 ENV/
 env/
+.venv/
+.venv
+
+# Poetry
+# Note: poetry.lock should be committed for applications to ensure reproducible builds
+.poetry/
 
 # IDE
 .vscode/
@@ -54,3 +60,4 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+node_modules

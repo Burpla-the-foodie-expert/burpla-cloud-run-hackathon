@@ -3,6 +3,7 @@ import { GroupChat } from "./group-chat";
 import { useEffect } from "react";
 
 import type { InteractiveCardConfig } from "./interactive-card";
+import { exampleConvoData } from "@/lib/load-convo-sample";
 
 // Define Message interface locally (matches group-chat.tsx)
 interface Message {
@@ -23,6 +24,8 @@ function GroupChatWithMock({
   userName,
   userId,
   userLocation,
+  convoData,
+  loadFromConvo = false,
 }: {
   initialMessages?: Message[];
   initialUsers?: Array<{ id: string; name: string; joinedAt: number }>;
@@ -30,6 +33,8 @@ function GroupChatWithMock({
   userName: string;
   userId: string;
   userLocation?: { lat: number; lng: number } | null;
+  convoData?: any[];
+  loadFromConvo?: boolean;
 }) {
   useEffect(() => {
     // Store original fetch
@@ -127,6 +132,8 @@ function GroupChatWithMock({
       userLocation={userLocation}
       initialMessages={initialMessages}
       initialUsers={initialUsers}
+      convoData={convoData}
+      loadFromConvo={loadFromConvo}
     />
   );
 }
@@ -1103,6 +1110,31 @@ export const WithAllInteractiveCards: Story = {
       description: {
         story:
           "Complete conversation flow matching convo_sample.json context. Shows all three interactive card types: restaurant recommendations, voting cards, and reminder cards. Demonstrates a real-world scenario where users discuss dining options, vote on restaurants, and set reminders.",
+      },
+    },
+  },
+};
+
+// Story using convo_sample.json data format
+export const WithConvoSampleData: Story = {
+  args: {
+    sessionId: "houston-convo-sample",
+    userName: "Huy Bui",
+    userId: "user-1",
+    userLocation: { lat: 29.7604, lng: -95.3698 }, // Houston, TX coordinates
+  },
+  render: (args) => (
+    <GroupChatWithMock
+      {...args}
+      convoData={exampleConvoData}
+      loadFromConvo={true}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Group chat loaded from convo_sample.json format. Shows the complete integration of the convo_sample.json data model with vote cards, reminder cards, and text messages. This demonstrates how the component handles all message types from the backend conversation format.",
       },
     },
   },

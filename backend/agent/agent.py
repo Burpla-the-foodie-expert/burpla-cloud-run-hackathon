@@ -3,7 +3,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from google.adk.agents import Agent
-from google.adk.models.lite_llm import LiteLlm # For multi-model support
+# from google.adk.models.lite_llm import LiteLlm # For multi-model support
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types # For creating message Content/Parts
@@ -44,7 +44,7 @@ root_agent = Agent(
            - Use 'distance_matrix' tool
            - Provide distance and estimated travel time
 
-        3. Recommendation 
+        3. Recommendation
         - When user asks for "Find me", "recommendations", "suggestions", "places to eat", "where should I eat", etc.
               - IMMEDIATELY delegate to 'pipeline_recommendation_agent' sub-agent
                 - DO NOT respond yourself - just transfer to the pipeline_recommendation_agent
@@ -63,7 +63,7 @@ root_agent = Agent(
              * Generate a complete vote card with photos and details
            - Simply return the pipeline's output to the user
 
-        
+
         4. **General Conversation:**
            - Answer questions about previous searches
            - Provide recommendations based on the places search results
@@ -96,7 +96,7 @@ else:
     session_service = InMemorySessionService()
 
 created_sessions = set()
-    
+
 async def call_agent_async(query: str, runner, user_id, session_id):
     content = types.Content(role='user', parts=[types.Part(text=query)])
     final_response_text = "Agent did not produce a final response."

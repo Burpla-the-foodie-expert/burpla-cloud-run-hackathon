@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sessions, type Session, type SessionMessage, type SessionUser } from "@/lib/session-store";
 
-// In-memory store for sessions (in production, use a database)
-const sessions = new Map<string, {
-  id: string;
-  messages: Array<{
-    id: string;
-    userId: string;
-    userName: string;
-    content: string;
-    role: "user" | "assistant";
-    timestamp: number;
-  }>;
-  users: Map<string, { name: string; joinedAt: number }>;
-  createdAt: number;
-}>();
+// Sessions are stored in the shared session-store module for access across API routes
+
+function generateId() {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId");
@@ -66,7 +58,7 @@ export async function POST(req: NextRequest) {
         sessions.set(newSessionId, {
           id: newSessionId,
           messages: [],
-          users: new Map(),
+          users: new Map<string, SessionUser>(),
           createdAt: Date.now(),
         });
       }
@@ -87,7 +79,7 @@ export async function POST(req: NextRequest) {
         session = {
           id: sessionId,
           messages: [],
-          users: new Map(),
+          users: new Map<string, SessionUser>(),
           createdAt: Date.now(),
         };
         sessions.set(sessionId, session);
@@ -115,7 +107,7 @@ export async function POST(req: NextRequest) {
         session = {
           id: sessionId,
           messages: [],
-          users: new Map(),
+          users: new Map<string, SessionUser>(),
           createdAt: Date.now(),
         };
         sessions.set(sessionId, session);
@@ -123,7 +115,7 @@ export async function POST(req: NextRequest) {
 
       const userData = session.users.get(userId);
       const isBot = userId === "burpla" || userId === "ai";
-      const newMessage = {
+      const newMessage: SessionMessage = {
         id: messageId || generateId(),
         userId,
         userName: isBot ? "Burpla" : (userData?.name || "Unknown"),
@@ -150,9 +142,5 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function generateId() {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 

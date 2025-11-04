@@ -1,5 +1,6 @@
 import { streamText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
+import { getSessionUsers, buildSystemMessage } from '@/lib/session-store'
 
 // Allow streaming responses up to 30 seconds
 export const runtime = 'edge'
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const { messages, location, userName } = await req.json()
+    const { messages, location, userName, sessionId } = await req.json()
 
     // Validate messages
     if (!messages || !Array.isArray(messages)) {
@@ -37,22 +38,19 @@ export async function POST(req: Request) {
       )
     }
 
-    // Build system message with user context
-    let systemMessage = 'You are Burpla, a helpful AI assistant. Your name is @burpla. When users mention "@burpla" in their messages, they are addressing you directly.';
+    // Get session users for context if sessionId provided
+    const sessionUsers = sessionId ? getSessionUsers(sessionId) : undefined;
 
-    if (userName) {
-      systemMessage += ` The user's name is ${userName}.`;
-    }
-
-    if (location) {
-      systemMessage += ` The user's current location is ${location.latitude}, ${location.longitude}. Use this information to provide location-based recommendations, calculate distances, and suggest nearby places.`;
-    }
-
-    systemMessage += ' Always respond as Burpla when users mention you with @burpla.';
+    // Build system message with user context and session information
+    const systemMessage = buildSystemMessage(
+      userName,
+      location ? { lat: location.latitude, lng: location.longitude } : undefined,
+      sessionUsers
+    );
 
     // Ensure system message is at the beginning of messages array
     const messagesWithContext = [
-      { role: 'system', content: systemMessage },
+      { role: 'system' as const, content: systemMessage },
       ...messages
     ]
 
