@@ -45,5 +45,6 @@ Return the result.
 
 Example: If conversation has IDs "ChIJ123", "ChIJ456", call generate_vote(place_ids=["ChIJ123", "ChIJ456"])
     """,
-    tools=[generate_vote]
+    tools=[generate_vote],
+    output_schema=VoteResponse
 )

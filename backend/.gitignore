@@ -146,3 +146,7 @@ firestore-debug.log
 
 # Claude
 .claude
+
+# Ignore research folder
+/research
+research/
