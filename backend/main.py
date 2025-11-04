@@ -11,11 +11,11 @@ from agent.agent import run_conversation
 import google.genai as genai
 from google.genai import types
 
-load_dotenv(dotenv_path="cloud_hack_agent/.env", override=True)
+load_dotenv(override=True)
 
 api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
-    raise ValueError("GOOGLE_API_KEY not found in environment. Check cloud_hack_agent/.env file.")
+    raise ValueError("GOOGLE_API_KEY not found in environment. Check .env file.")
 
 client = genai.Client(api_key=api_key)
 
@@ -42,6 +42,12 @@ conversations = [{
     'convo_user_ids': [1, 2, 3],
     'convo_content': sample_conversation_content
 }]
+
+@app.on_event("startup")
+async def startup():
+    print(f"✓ API Key loaded: {api_key[:10]}...")
+    print("✓ Server started successfully!")
+    print(f"✓ Docs available at: http://localhost:8000/docs")
 
 
 class ConversationList(BaseModel):
@@ -96,6 +102,113 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.post("/clear_session")
+async def clear_session(session_id: str):
+    """Clear a specific session to start fresh"""
+    from agent.agent import created_sessions, session_service
+
+    # Remove from created_sessions tracking
+    keys_to_remove = [key for key in created_sessions if session_id in key]
+    for key in keys_to_remove:
+        created_sessions.remove(key)
+
+    return {"status": "success", "message": f"Session '{session_id}' cleared", "cleared_keys": keys_to_remove}
+
+
+@app.get("/sessions/{user_id}")
+async def list_user_sessions(user_id: int):
+    """List all sessions for a user"""
+    from agent.agent import session_service
+    from agent.config import USE_FIRESTORE
+
+    if not USE_FIRESTORE:
+        return {"error": "Session listing only available with Firestore", "use_firestore": False}
+
+    try:
+        sessions = await session_service.list_sessions(
+            app_name="burbla",
+            user_id=str(user_id)
+        )
+        return {
+            "user_id": user_id,
+            "total_sessions": len(sessions),
+            "sessions": sessions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
+
+
+@app.get("/session/{session_id}/history")
+async def get_session_history(session_id: str, user_id: int = 1):
+    """Get full conversation history for a session"""
+    from agent.agent import session_service
+
+    try:
+        session = await session_service.get_session(
+            app_name="burbla",
+            user_id=str(user_id),
+            session_id=session_id
+        )
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return {
+            "session_id": session_id,
+            "user_id": user_id,
+            "messages": session.get("messages", []),
+            "created_at": session.get("created_at"),
+            "updated_at": session.get("updated_at"),
+            "message_count": len(session.get("messages", []))
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
+
+
+@app.delete("/session/{session_id}")
+async def delete_session_endpoint(session_id: str, user_id: int = 1):
+    """Delete a session permanently"""
+    from agent.agent import session_service, created_sessions
+    from agent.config import USE_FIRESTORE
+
+    try:
+        if USE_FIRESTORE:
+            await session_service.delete_session(
+                app_name="burbla",
+                user_id=str(user_id),
+                session_id=session_id
+            )
+
+        # Remove from tracking
+        keys_to_remove = [key for key in created_sessions if session_id in key]
+        for key in keys_to_remove:
+            created_sessions.remove(key)
+
+        return {
+            "status": "success",
+            "message": f"Session '{session_id}' deleted",
+            "cleared_keys": keys_to_remove
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting session: {str(e)}")
+
+
+@app.get("/storage_info")
+async def storage_info():
+    """Get information about current storage configuration"""
+    from agent.config import USE_FIRESTORE, GOOGLE_CLOUD_PROJECT, FIRESTORE_COLLECTION
+
+    return {
+        "storage_type": "firestore" if USE_FIRESTORE else "in_memory",
+        "persistent": USE_FIRESTORE,
+        "project_id": GOOGLE_CLOUD_PROJECT if USE_FIRESTORE else None,
+        "collection": FIRESTORE_COLLECTION if USE_FIRESTORE else None,
+        "warning": None if USE_FIRESTORE else "Using in-memory storage. Conversations will be lost on restart."
+    }
+
+
 @app.get("/init", response_model=ConversationList)
 async def get_all_conversations():
     """Retrieve all available conversations on application startup"""
@@ -134,8 +247,18 @@ async def send_user_message(message: UserMessage):
             query = message.message
             user_id = str(message.user_id)
             session_id = message.session_id
-            print(query)
+            
+
+            print(f"📨 User {user_id} | Session {session_id}")
+            print(f"📝 Query: {query}")
+
             response = await run_conversation(query, app_name = "burbla", user_id = user_id, session_id = session_id)
+
+            if not response:
+                response = "No response generated"
+
+            print(f"✅ Response: {response[:100]}...")
+
             agent_message = AgentMessage(
                 user_id=0,
                 name="Burpla",
@@ -145,6 +268,10 @@ async def send_user_message(message: UserMessage):
             return agent_message
 
         except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
             error_message = AgentMessage(
                 user_id=0,
                 name="Burpla",
