@@ -7,7 +7,8 @@ from google.adk.models.lite_llm import LiteLlm # For multi-model support
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types # For creating message Content/Parts
-from agent.sub_agent import generate_vote_agent
+from agent.sub_agents.vote_card import pipeline_vote_agent
+from agent.sub_agents.recommendation_card import pipeline_recommendation_agent
 from agent.config import SUB_MODEL_NAME, USE_FIRESTORE, GOOGLE_CLOUD_PROJECT, FIRESTORE_COLLECTION
 from agent.tools import distance_matrix, google_places_text_search
 
@@ -22,55 +23,59 @@ load_dotenv(override=True)
 root_agent = Agent(
     name="food_recommendation_agent",
     model = SUB_MODEL_NAME,
-    description="The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
+    description="Your name is Burbla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
     instruction="""
-        You are the main Food Recommendation Agent coordinating a team. Your primary responsibility is to provide food place recommendations, distance information, up-to-date information, and generate vote requests.
+        Your name is Burbla. You are the main Food Recommendation Agent coordinating a team. Your primary responsibility is to provide food place recommendations, distance information, up-to-date information, and generate vote requests.
 
         **Tools Available:**
-        1. google_places_text_search: Find places to eat based on user queries
-        2. distance_matrix: Calculate distances between locations
+        1. distance_matrix: Calculate distances between locations
+        2. google_places_text_search: Find places to eat based on user queries. Only use it when the user want more information about a particular place
 
         **Sub-Agents Available:**
-        1. generate_vote_agent: Creates detailed voting options from place IDs
+        1. pipeline_vote_agent: Creates detailed voting polls from conversation history
+        2. pipeline_recommendation_agent: Generates recommendation cards from search results
 
         **How to Handle Requests:**
 
         1. **Finding Restaurants:**
-           - Use 'google_places_text_search' tool to search for restaurants
-           - When presenting results, include:
-             * Restaurant name
-             * Address
-             * Rating and number of reviews
-             * Place ID (important for vote generation)
-           - Format example: "1. **Pho Saigon** - 123 Main St, 4.5★ (200 reviews) [ID: ChIJ...]"
-           - Keep the place IDs in your response so they can be referenced later
+           - Use 'google_places_text_search' tool to search for restaurants if user ask more information about a place. "What time does Pho Dien close, what is the review of Sapa restaurant
 
         2. **Distance Calculations:**
            - Use 'distance_matrix' tool
            - Provide distance and estimated travel time
 
-        3. **Creating Votes:**
-           - When user asks to "create a vote", "generate vote", "make a poll", etc.
-           - Delegate to 'generate_vote_agent' sub-agent immediately
-           - The vote agent will:
-             * Look at conversation history to find place IDs
-             * Use google_places_text_search if needed
-             * Call generate_vote tool to create the vote card
-             * Return a JSON formatted vote
-           - You don't need to do anything else - just delegate
+        3. Recommendation 
+        - When user asks for "Find me", "recommendations", "suggestions", "places to eat", "where should I eat", etc.
+              - IMMEDIATELY delegate to 'pipeline_recommendation_agent' sub-agent
+                - DO NOT respond yourself - just transfer to the pipeline_recommendation_agent
+                - The pipeline will:
+                    * Use google_places_text_search to find relevant restaurants
+                    * Generate a recommendation card with photos and details
+                - Simply return the pipeline's output to the user
 
+        3. **Creating Votes (CRITICAL):**
+           - When user asks to "create a vote", "generate vote", "make a poll", "start a vote", etc.
+           - IMMEDIATELY delegate to 'pipeline_vote_agent' sub-agent
+           - DO NOT respond yourself - just transfer to the pipeline_vote_agent
+           - The pipeline will:
+             * Analyze conversation history to identify restaurants
+             * Find place IDs for those restaurants
+             * Generate a complete vote card with photos and details
+           - Simply return the pipeline's output to the user
+
+        
         4. **General Conversation:**
            - Answer questions about previous searches
            - Provide recommendations based on the places search results
            - For anything outside your scope, politely state you cannot help
 
         **Important:**
-        - Always include place IDs when showing restaurant results
-        - Conversation history is shared, so the vote agent can see previous restaurants
-        - When user asks for vote, immediately delegate to generate_vote_agent
+        - When user requests a vote, immediately transfer to pipeline_vote_agent (don't try to handle it yourself)
+        - The pipeline has access to full conversation history
+        - Return the pipeline's vote card output directly to the user
         """,
     tools=[google_places_text_search, distance_matrix],
-    sub_agents=[generate_vote_agent]
+    sub_agents=[pipeline_vote_agent, pipeline_recommendation_agent]
 )
 
 # Global session service to maintain conversation history
@@ -159,7 +164,6 @@ async def run_conversation(query: str, app_name: str = "burbla", user_id: str = 
         )
 
         if not response or response == "Agent did not produce a final response.":
-            print(f"  ⚠️  No response generated, using fallback")
             response = "I apologize, but I couldn't generate a response. Please try again."
 
         print(f"  💾 Messages saved to session")

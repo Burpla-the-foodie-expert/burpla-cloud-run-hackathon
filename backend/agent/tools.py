@@ -31,7 +31,6 @@ def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> Non
         return {"error": f"Distance Matrix API Request failed: {e}"}
     return result
 
-
 def google_places_text_search(text_query: str) -> dict:
     """
         Searches for places using Google Places API based on a text query.
@@ -54,12 +53,29 @@ def google_places_text_search(text_query: str) -> dict:
     try:
         response = requests.post(api_url, headers=headers, json=payload)
         response.raise_for_status()
-        result = response.json()
+
+        result = {}
         result["type"] = "recommendation"
+        options = []
+
+        for place in response.json()['places']:
+            option = {
+                'restaurant_id': place.get('id', 'N/A'),
+                'restaurant_name': place.get('displayName', {}).get('text', 'Unknown'),
+                'description': place.get('formattedAddress', 'Address not available'),
+                'image': "",
+                'rating': str(place.get('rating', 'N/A')),
+                'userRatingCount': place.get('userRatingCount', 0),
+                'formattedAddress': place.get('formattedAddress', 'N/A'),
+                'priceLevel': str(place.get('priceLevel', 'N/A')),
+                'map': f"https://www.google.com/maps/search/?api=1&query={place.get('displayName', {}).get('text', '')}&query_place_id={place.get('id', '')}"
+            }
+            options.append(option)  # FIXED: Now inside the loop
+
+        result['options'] = options
         return result
     except requests.exceptions.RequestException as e:
         return {"error": f"Places API Request failed: {e}", "type": "recommendation"}
-
 
 def generate_vote(place_ids: List[str]) -> dict:
     """
@@ -99,7 +115,8 @@ def generate_vote(place_ids: List[str]) -> dict:
                 'restaurant_name': place.get("displayName", {}).get("text"),
                 'description': place.get("formattedAddress"),
                 'image': photo_uri or "",
-                'review': f"{place.get('rating', 'N/A')}/5.0 ({place.get('userRatingCount', 0)} reviews)",
+                'rating': place.get('rating', 'N/A'),
+                'userRatingCount': place.get('userRatingCount', 0),
                 'number_of_vote': 0,
                 'map': place.get("googleMapsUri")
             }
