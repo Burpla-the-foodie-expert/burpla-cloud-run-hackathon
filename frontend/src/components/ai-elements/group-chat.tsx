@@ -408,6 +408,51 @@ export function GroupChat({
     };
   };
 
+  // Convert backend voting card format to InteractiveCardConfig
+  const convertVotingCard = (data: any): InteractiveCardConfig | undefined => {
+    if (!data || data.type !== "vote_card" || !data.vote_options) {
+      return undefined;
+    }
+
+    // Convert vote options to the format expected by VotingCardConfig
+    const options = data.vote_options.map((opt: any) => {
+      // Convert rating string to number
+      const rating = opt.rating ? parseFloat(opt.rating) : undefined;
+
+      return {
+        id: opt.restaurant_id || undefined,
+        restaurant_id: opt.restaurant_id || undefined,
+        name: opt.restaurant_name,
+        restaurant_name: opt.restaurant_name,
+        description: opt.description,
+        image: opt.image || undefined,
+        photoUri: opt.image || undefined,
+        votes: opt.number_of_vote || 0,
+        number_of_vote: opt.number_of_vote || 0,
+        map: opt.map,
+        googleMapsUri: opt.map,
+        hyperlink: opt.map,
+        rating: rating,
+        userRatingCount: opt.userRatingCount,
+      };
+    });
+
+    // Calculate total votes
+    const totalVotes = options.reduce((sum: number, opt: any) => {
+      return sum + (opt.votes || opt.number_of_vote || 0);
+    }, 0);
+
+    return {
+      type: "voting",
+      config: {
+        question: "Vote for your favorite restaurant:",
+        options,
+        totalVotes,
+        allowVoting: false, // Set to true if you want to enable voting functionality
+      },
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -493,7 +538,7 @@ export function GroupChat({
           if (sentResponse.ok) {
             const sentData = await sentResponse.json();
 
-            // Parse the message to check if it contains a recommendation card
+            // Parse the message to check if it contains a card (recommendation or voting)
             let cardConfig: InteractiveCardConfig | undefined = undefined;
             let messageContent = sentData.message || "";
 
@@ -505,10 +550,21 @@ export function GroupChat({
             ) {
               const parsedData = parsePythonDict(messageContent);
               if (parsedData) {
-                cardConfig = convertRecommendationCard(parsedData);
-                if (cardConfig) {
-                  // Set a user-friendly message content when we have a card
-                  messageContent = `Here are some restaurant recommendations:`;
+                // Check for recommendation card
+                if (parsedData.type === "recommendation_card") {
+                  cardConfig = convertRecommendationCard(parsedData);
+                  if (cardConfig) {
+                    // Set a user-friendly message content when we have a card
+                    messageContent = `Here are some restaurant recommendations:`;
+                  }
+                }
+                // Check for voting card
+                else if (parsedData.type === "vote_card") {
+                  cardConfig = convertVotingCard(parsedData);
+                  if (cardConfig) {
+                    // Set a user-friendly message content when we have a voting card
+                    messageContent = `Vote for your favorite restaurant:`;
+                  }
                 }
               }
             }
