@@ -1,5 +1,5 @@
 # @title Import necessary libraries
-import os
+import os, re, json
 import asyncio
 from dotenv import load_dotenv
 from google.adk.agents import Agent
@@ -162,7 +162,11 @@ async def run_conversation(query: str, app_name: str = "burbla", user_id: str = 
             user_id = user_id,
             session_id = session_id
         )
-
+        if '```json' in response:
+            response = re.sub(r"^```json\s*|\s*```$", "", response.strip())
+        if response.startswith('{') or response.startswith('['):
+            response = json.loads(response)
+            response = str(response)
         if not response or response == "Agent did not produce a final response.":
             response = "I apologize, but I couldn't generate a response. Please try again."
 
