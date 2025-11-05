@@ -1,20 +1,15 @@
 from dotenv import load_dotenv
 from google.adk.agents import Agent
-from google.genai import types
-from agent.config import ROOT_MODEL_NAME
-import logging, warnings
+from config import SUB_MODEL_NAME
 from agent.tools import google_places_text_search
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-logging.basicConfig(level=logging.ERROR)
-warnings.filterwarnings("ignore")
 load_dotenv(override=True)
-
 
 class RecommendationOptions(BaseModel):
     """Single restaurant recommendation option."""
-    restaurant_id: Optional[str] = Field(default=None, description="Unique restaurant ID (optional)")
+    restaurant_id: str = Field(default=None, description="Unique restaurant ID, must be provided")
     restaurant_name: str = Field(..., description="Name of the restaurant")
     description: str = Field(..., description="Short description or reason for recommendation")
     image: Optional[str] = Field(default="", description="URL of the restaurant image")
@@ -44,7 +39,6 @@ class RecommendationResult(BaseModel):
     """Top-level response schema for the agent output."""
     type: str = Field(..., description="Always 'recommendation_card'")
     options: List[RecommendationOptions] = Field(..., description="List of restaurant recommendation cards")
-    error: Optional[str] = Field(default=None, description="Error message, if any")
 
     class Config:
         json_schema_extra = {
@@ -53,23 +47,23 @@ class RecommendationResult(BaseModel):
                 "options": [
                     RecommendationOptions.Config.json_schema_extra["example"]
                 ],
-                "error": None
             }
         }
 
 
 pipeline_recommendation_agent = Agent(
     name="pipeline_recommendation_agent",
-    model=ROOT_MODEL_NAME,
+    model=SUB_MODEL_NAME,
     description="Searches for restaurants and returns structured recommendation cards.",
     instruction=f"""
-Return the result in the following JSON format:
+        Return the result in the following JSON format:
 
-{RecommendationResult.model_json_schema()["example"]}
+        {RecommendationResult.model_json_schema()["example"]}
 
-Always set "type" to "recommendation_card".
-If an error occurs, include an "error" message string.
+        Always set "type" to "recommendation_card".
+        Restaurant id must be provided for each option.
     """,
     tools=[google_places_text_search],
-    output_schema=RecommendationResult
+    output_schema=RecommendationResult,
+    disallow_transfer_to_parent=True
 )

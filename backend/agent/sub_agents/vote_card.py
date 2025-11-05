@@ -1,21 +1,16 @@
 # @title Import necessary libraries
 from dotenv import load_dotenv
 from google.adk.agents import Agent
-from google.genai import types  # For creating message Content/Parts
-from agent.config import ROOT_MODEL_NAME
-import logging, warnings
+from config import SUB_MODEL_NAME
 from agent.tools import generate_vote
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-logging.basicConfig(level=logging.ERROR)
-warnings.filterwarnings("ignore")
 load_dotenv(override=True)
-
 
 class VoteOption(BaseModel):
     """Single restaurant voting option."""
-    restaurant_id: str = Field(..., description="Unique restaurant ID.")
+    restaurant_id: str = Field(..., description="Unique restaurant ID. Must be provided.")
     restaurant_name: Optional[str] = Field(None, description="Restaurant display name.")
     description: Optional[str] = Field(None, description="Short summary or cuisine info.")
     image: str = Field("", description="Image URL of the restaurant.")
@@ -70,22 +65,21 @@ class VoteResponse(BaseModel):
 
 pipeline_vote_agent = Agent(
     name="pipeline_vote_agent",
-    model=ROOT_MODEL_NAME,
+    model=SUB_MODEL_NAME,
     description="Creates structured voting polls from restaurant IDs found in prior conversation.",
     instruction=f"""
-Extract all restaurant_id values from previous messages (typically from recommendation cards).
-Then call:
-    generate_vote(place_ids=[list_of_ids])
+        Extract all restaurant_id values from previous messages (typically from recommendation cards).
+        Then call:
+            generate_vote(place_ids=[list_of_ids])
 
-Return the result strictly following this JSON format:
+        Return the result strictly following this JSON format:
+        {VoteResponse.model_json_schema()['example']}
 
-{VoteResponse.model_json_schema()['example']}
-
-Notes:
-- Always set "type" to "vote_card".
-- Ensure "vote_options" is a list of valid restaurant options with their IDs, names, and vote counts.
-- If any field is missing, fill with sensible defaults (e.g., rating="N/A", image="").
+        Notes:
+        - Always set "type" to "vote_card".
+        - Ensure "vote_options" is a list of valid restaurant options with their IDs, names, and vote counts.
     """,
     tools=[generate_vote],
-    output_schema=VoteResponse
+    output_schema=VoteResponse,
+    disallow_transfer_to_parent=True
 )
