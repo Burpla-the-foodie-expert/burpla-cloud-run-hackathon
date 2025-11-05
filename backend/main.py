@@ -6,14 +6,17 @@ import os
 import json
 from dotenv import load_dotenv
 import uuid
-from cloud_hack_agent.places_tool import google_places_text_search, generate_vote
+# from cloud_hack_agent import vote_agent
+from agent.agent import run_conversation
 import google.genai as genai
+from google.genai import types
 
-load_dotenv(dotenv_path="cloud_hack_agent/.env", override=True)
+load_dotenv(override=True)
 
+# Load API Key from environment
 api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
-    raise ValueError("GOOGLE_API_KEY not found in environment. Check cloud_hack_agent/.env file.")
+    raise ValueError("GOOGLE_API_KEY not found in environment. Check .env file.")
 
 client = genai.Client(api_key=api_key)
 
@@ -31,8 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-messages_db = {}
-
+# Sample Data
 with open('convo_sample.json') as f:
     sample_conversation_content = json.load(f)
 
@@ -43,7 +45,7 @@ conversations = [{
     'convo_content': sample_conversation_content
 }]
 
-
+# Pydantic Models
 class ConversationList(BaseModel):
     conversations: List[Dict[str, Any]] = Field(
         default=[],
@@ -55,10 +57,8 @@ class ConversationList(BaseModel):
         }]]
     )
 
-
 class ConvoRequest(BaseModel):
     convo_id: int = Field(default=0, description="Conversation ID to retrieve", examples=[1])
-
 
 class Conversation(BaseModel):
     id: int = Field(description="Conversation ID", examples=[1])
@@ -66,21 +66,26 @@ class Conversation(BaseModel):
     user_id_list: List[int] = Field(description="List of user IDs", examples=[[1, 2, 3]])
     content: List[Dict[str, Any]] = Field(description="Message history", default=[])
 
-
 class UserMessage(BaseModel):
-    user_id: int = Field(description="User ID", examples=[1])
-    name: str = Field(description="User name", examples=["Huy Bui"])
+    user_id: int = Field(default=1, description="User ID")
     message: str = Field(description="Message text", examples=["Find me Italian restaurants in Houston 77083"])
-    id: str = Field(default="", description="Message ID (auto-generated)")
+    message_id: str = Field(default="something", description="Message ID (auto-generated)")
+    session_id : str = Field(default="something", description="Session ID (auto-generated)")
     is_to_agent: Optional[bool] = Field(default=True, description="If true, send to AI agent, otherwise, send to human")
-
 
 class AgentMessage(BaseModel):
     user_id: int = Field(default=0, description="Agent user ID")
     name: str = Field(default="Burpla", description="Agent name")
     message: str = Field(description="Agent response", examples=["I found 5 restaurants in Houston 77083!"])
-    id: str = Field(description="Message ID")
+    message_id: str = Field(description="Message ID")
 
+# Endpoints
+    
+@app.on_event("startup")
+async def startup():
+    print(f"✓ API Key loaded: {api_key[:10]}...")
+    print("✓ Server started successfully!")
+    print(f"✓ Docs available at: http://localhost:8000/docs")
 
 @app.get("/")
 async def root():
@@ -96,15 +101,6 @@ async def root():
 async def health_check():
     """Health check endpoint for monitoring service availability"""
     return {"status": "healthy"}
-
-
-@app.get("/cicd-test")
-async def cicd_test():
-    """A simple endpoint to verify CI/CD deployment success"""
-    return {
-        "message": "CI/CD pipeline test successful!",
-        "version": "1.0.0"
-    }
 
 
 @app.get("/init", response_model=ConversationList)
@@ -139,42 +135,32 @@ async def get_conversation_by_id(request: ConvoRequest):
 @app.post("/sent", response_model=AgentMessage)
 async def send_user_message(message: UserMessage):
     """Send message to agent and wait for response"""
-    user_message_id = str(uuid.uuid4())
-    messages_db[user_message_id] = message.model_dump()
+    if message.is_to_agent:
+        message_id = str(uuid.uuid4())
+        query = message.message
+        user_id = str(message.user_id)
+        session_id = message.session_id
+        
+        print(f"📨 User {user_id} | Session {session_id}")
+        print(f"📝 Query: {query}")
 
-    if message.is_to_agent or not message.is_to_agent:
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash-exp',
-                contents=message.message
-            )
-            agent_response_text = response.text
+        response = await run_conversation(query, app_name = "burbla", user_id = user_id, session_id = session_id)
+        print(f"✅ Response: {response}")
 
-            agent_message = AgentMessage(
-                user_id=0,
-                name="Burpla",
-                message=agent_response_text,
-                id=str(uuid.uuid4())
-            )
+        agent_message = AgentMessage(
+            user_id=0,
+            name="Burpla",
+            message=response,
+            message_id=message_id
+        )
+        return agent_message
 
-            messages_db[agent_message.id] = agent_message.model_dump()
-            return agent_message
-
-        except Exception as e:
-            error_message = AgentMessage(
-                user_id=0,
-                name="Burpla",
-                message=f"Error: {str(e)}",
-                id=str(uuid.uuid4())
-            )
-            messages_db[error_message.id] = error_message.model_dump()
-            return error_message
     else:
         return AgentMessage(
             user_id=0,
             name="Burpla",
             message="Message received",
-            id=str(uuid.uuid4())
+            message_id=message.message_id
         )
 
 
