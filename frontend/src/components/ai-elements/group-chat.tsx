@@ -312,6 +312,102 @@ export function GroupChat({
     return mentionRegex.test(text);
   };
 
+  // Parse Python dict string to JavaScript object
+  // Handles strings like: "{'type': 'recommendation_card', 'options': [...], 'error': None}"
+  const parsePythonDict = (str: string): any => {
+    try {
+      // Replace Python None with null (before quote replacement)
+      let jsonStr = str.replace(/None/g, "null");
+
+      // Handle escaped double quotes in strings (like \"Pho X Trang's\")
+      // First, replace escaped double quotes with a temporary placeholder
+      jsonStr = jsonStr.replace(/\\"/g, "___ESCAPED_QUOTE___");
+
+      // Replace single quotes with double quotes
+      jsonStr = jsonStr.replace(/'/g, '"');
+
+      // Restore the escaped double quotes (now they're regular escaped quotes)
+      jsonStr = jsonStr.replace(/___ESCAPED_QUOTE___/g, '\\"');
+
+      // Try to parse
+      const parsed = JSON.parse(jsonStr);
+      return parsed;
+    } catch (error) {
+      console.error("Failed to parse Python dict:", error, str);
+      // If parsing fails, try a more permissive approach using Function constructor
+      // This handles Python dict syntax more accurately (note: input is from our own backend, so safe)
+      try {
+        let pythonStr = str
+          .replace(/None/g, "null")
+          .replace(/True/g, "true")
+          .replace(/False/g, "false");
+        const func = new Function("return " + pythonStr);
+        return func();
+      } catch (fallbackError) {
+        console.error("Fallback parsing also failed:", fallbackError);
+        return null;
+      }
+    }
+  };
+
+  // Convert backend recommendation card format to InteractiveCardConfig
+  const convertRecommendationCard = (
+    data: any
+  ): InteractiveCardConfig | undefined => {
+    if (!data || data.type !== "recommendation_card" || !data.options) {
+      return undefined;
+    }
+
+    // If there's an error, don't show the card
+    if (data.error) {
+      console.warn("Recommendation card has error:", data.error);
+      return undefined;
+    }
+
+    const restaurants = data.options.map((opt: any) => {
+      // Convert price level string to number if possible
+      let priceLevel: number | undefined;
+      if (opt.priceLevel && opt.priceLevel !== "N/A") {
+        // Map price level strings to numbers
+        const priceLevelMap: Record<string, number> = {
+          PRICE_LEVEL_FREE: 0,
+          PRICE_LEVEL_INEXPENSIVE: 1,
+          PRICE_LEVEL_MODERATE: 2,
+          PRICE_LEVEL_EXPENSIVE: 3,
+          PRICE_LEVEL_VERY_EXPENSIVE: 4,
+        };
+        priceLevel = priceLevelMap[opt.priceLevel] ?? undefined;
+      }
+
+      // Convert rating string to number
+      const rating = opt.rating ? parseFloat(opt.rating) : undefined;
+
+      return {
+        id: opt.restaurant_id || undefined,
+        name: opt.restaurant_name,
+        address: opt.formattedAddress || opt.description,
+        formattedAddress: opt.formattedAddress || opt.description,
+        rating: rating,
+        userRatingCount: opt.userRatingCount,
+        priceLevel: priceLevel,
+        photoUri: opt.image || undefined,
+        googleMapsUri: opt.map,
+        hyperlink: opt.map,
+      };
+    });
+
+    return {
+      type: "restaurant_recommendation",
+      config: {
+        restaurants,
+        userLocation: userLocation
+          ? { lat: userLocation.lat, lng: userLocation.lng }
+          : undefined,
+        title: "Restaurant Recommendations",
+      },
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -397,17 +493,36 @@ export function GroupChat({
           if (sentResponse.ok) {
             const sentData = await sentResponse.json();
 
+            // Parse the message to check if it contains a recommendation card
+            let cardConfig: InteractiveCardConfig | undefined = undefined;
+            let messageContent = sentData.message || "";
+
+            // Try to parse the message as a Python dict string
+            // Check if message looks like a Python dict (starts with { and contains 'type')
+            if (
+              messageContent.trim().startsWith("{") &&
+              messageContent.includes("'type'")
+            ) {
+              const parsedData = parsePythonDict(messageContent);
+              if (parsedData) {
+                cardConfig = convertRecommendationCard(parsedData);
+                if (cardConfig) {
+                  // Set a user-friendly message content when we have a card
+                  messageContent = `Here are some restaurant recommendations:`;
+                }
+              }
+            }
+
             // Create message with cardConfig if available
             // Backend returns: { user_id, name, message, id }
             const aiMessage: Message = {
               id: sentData.id || messageId,
               userId: "burpla",
               userName: sentData.name || "Burpla",
-              content: sentData.message,
+              content: messageContent,
               role: "assistant",
               timestamp: Date.now(),
-              // Backend doesn't return cardConfig yet, but frontend can still handle it if added
-              cardConfig: sentData.cardConfig,
+              cardConfig: cardConfig,
             };
 
             setMessages((prev) =>
