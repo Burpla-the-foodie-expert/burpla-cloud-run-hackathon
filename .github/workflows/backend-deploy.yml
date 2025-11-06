@@ -1,0 +1,41 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read" # Rebuild 7
+      id-token: "write" # 這是 WIF 認證所必需的權限
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: "${{ secrets.GCP_WIF_PROVIDER }}"
+          service_account: "${{ secrets.GCP_SA_EMAIL }}"
+
+      - name: Build and Push Docker Image
+        run: |-
+          gcloud builds submit ./backend \
+            --tag "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/backend-service:sha-${{ github.sha }}"
+
+      - name: Deploy to Cloud Run
+        run: |-
+          gcloud run deploy burpla-api \
+            --image "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/backend-service:sha-${{ github.sha }}" \
+            --region "northamerica-northeast1" \
+            --port 8000 \
+            --update-secrets=GOOGLE_API_KEY=google-api-key:latest \
+            --allow-unauthenticated

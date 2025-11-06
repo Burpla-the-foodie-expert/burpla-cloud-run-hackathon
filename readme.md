@@ -24,6 +24,7 @@ npm run dev
 ```
 
 This will start:
+
 - Backend API on http://localhost:8000
 - Frontend app on http://localhost:3000
 
@@ -84,6 +85,7 @@ poetry install
 ```
 
 This will create a virtual environment and install all required packages including:
+
 - FastAPI
 - Uvicorn
 - google-genai
@@ -117,6 +119,7 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ### API Endpoints
 
 The frontend calls these backend endpoints:
+
 - `POST /sent` - Send message to AI agent
 - `GET /init` - Get list of conversations
 - `POST /convo` - Get conversation by ID
@@ -124,3 +127,7 @@ The frontend calls these backend endpoints:
 - `GET /` - API information
 
 Note: Session management (`/api/sessions`) still uses Next.js API routes for frontend-only state management.
+Secrets:
+GCP_PROJECT_ID = burpla
+GCP_SA_EMAIL = github-actions-deployer@burpla.iam.gserviceaccount.com
+GCP_WIF_PROVIDER = projects/415080714475/locations/global/workloadIdentityPools/github-pool/providers/github-provider

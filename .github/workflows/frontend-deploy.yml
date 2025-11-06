@@ -1,0 +1,40 @@
+name: Deploy Frontend to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend-test/**"
+      - ".github/workflows/frontend-deploy.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read" # Rebuild 7
+      id-token: "write" # 這是 WIF 認證所必需的權限
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # 步驟一：下載你的程式碼
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: "google-github-actions/auth@v2" # 步驟二：使用官方 action 進行認證
+        with:
+          workload_identity_provider: "${{ secrets.GCP_WIF_PROVIDER }}" # 步驟二：設定 WIF 提供者
+          service_account: "${{ secrets.GCP_SA_EMAIL }}" # 步驟二：設定服務帳戶
+
+      - name: Build and Push Docker Image
+        run: |- # 步驟三：建置並推送映像檔
+          gcloud builds submit ./frontend-test \
+            --tag "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/frontend-test:sha-${{ github.sha }}"
+
+      - name: Deploy to Cloud Run
+        run: |- # 步驟四：部署到 Cloud Run
+          gcloud run deploy burpla-ui \
+            --image "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/frontend-test:sha-${{ github.sha }}" \
+            --region "northamerica-northeast1" \
+            --port 80 \
+            --allow-unauthenticated
