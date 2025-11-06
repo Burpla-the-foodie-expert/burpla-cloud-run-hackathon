@@ -12,7 +12,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: "read" # Rebuild 1
+      contents: "read" # Rebuild 2
       id-token: "write"
 
     steps:
