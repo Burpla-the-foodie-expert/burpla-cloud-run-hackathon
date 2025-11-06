@@ -92,8 +92,7 @@ async def call_agent_async(query: str, runner, user_id, session_id):
 
 async def run_conversation(query: str, app_name: str = "burpla", user_id: str = "something", session_id: str = "something"):
     try:
-        app_name = "burpla"
-        session_key = (app_name, user_id, session_id)
+        session_key = (app_name, session_id)
         if session_key not in created_sessions:
             await session_service.create_session(
                 app_name=app_name,
@@ -101,7 +100,7 @@ async def run_conversation(query: str, app_name: str = "burpla", user_id: str = 
                 session_id=session_id
             )
             created_sessions.add(session_key)
-        print(app_name)
+
         runner_agent_team = Runner(
             agent=root_agent,
             app_name=app_name,
@@ -121,7 +120,6 @@ async def run_conversation(query: str, app_name: str = "burpla", user_id: str = 
             response = response.replace("\\", "\\\\")
             response = json.loads(response)
             response = str(response)
-
         return response
 
     except Exception as e:

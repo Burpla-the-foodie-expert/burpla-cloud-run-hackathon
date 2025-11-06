@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from typing import List
 
 load_dotenv(override=True)
-
 def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> None:
     """
         Retrieves the distance matrix between an origin and a destination using Google Maps API.
@@ -32,9 +31,6 @@ def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> Non
     except Exception as e:
         return {"error": f"Distance Matrix API Request failed: {e}"}
     return result
-
-import os
-import requests
 
 def google_places_text_search(text_query: str) -> dict:
     """
@@ -65,6 +61,7 @@ def google_places_text_search(text_query: str) -> dict:
 
         # Check for the 'places' key in the response JSON
         places = response.json().get('places', [])
+        # Check if places_cache variable exitss
 
         for place in places:
             photo_uri = None
@@ -77,16 +74,13 @@ def google_places_text_search(text_query: str) -> dict:
 
             option = {
                 'restaurant_id': place.get('id', 'N/A'),
-                # Using .get('text') for nested displayName
                 'restaurant_name': place.get('displayName', {}).get('text', 'Unknown'),
                 'description': place.get('formattedAddress', 'Address not available'),
                 'image': photo_uri or "",
-                # Ensure fields are correctly fetched from the Place object
                 'rating': str(place.get('rating', 'N/A')),
                 'userRatingCount': place.get('userRatingCount', 0),
                 'formattedAddress': place.get('formattedAddress', 'N/A'),
                 'priceLevel': str(place.get('priceLevel', 'N/A')),
-                # Using the correct, returned Google Maps URI
                 'map': place.get('googleMapsUri', 'N/A')
             }
             result['options'].append(option)
@@ -155,7 +149,4 @@ def generate_vote(place_ids: List[str]) -> dict:
 
     return res
 
-
-
-
-print(google_places_text_search("best pizza in New York"))
+# print(google_places_text_search("best pizza in New York"))

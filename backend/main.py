@@ -64,9 +64,10 @@ class AgentMessage(BaseModel):
 
 @app.on_event("startup")
 async def startup():
+    port = os.getenv("PORT", "8000")
     print(f"✓ API Key loaded: {api_key[:10]}...")
     print("✓ Server started successfully!")
-    print(f"✓ Docs available at: http://localhost:8000/docs")
+    print(f"✓ Docs available at: http://localhost:{port}/docs")
 
 @app.get("/")
 async def root():
@@ -148,4 +149,5 @@ async def send_user_message(message: UserMessage):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
