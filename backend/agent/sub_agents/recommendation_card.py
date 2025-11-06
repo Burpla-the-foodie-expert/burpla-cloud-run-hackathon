@@ -1,6 +1,9 @@
+import warnings
+warnings.filterwarnings('ignore')
+
 from dotenv import load_dotenv
 from google.adk.agents import Agent
-from config import SUB_MODEL_NAME
+from config import GEMINI_FLASH, GEMINI_PRO
 from agent.tools import google_places_text_search
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -53,7 +56,7 @@ class RecommendationResult(BaseModel):
 
 pipeline_recommendation_agent = Agent(
     name="pipeline_recommendation_agent",
-    model=SUB_MODEL_NAME,
+    model=GEMINI_FLASH,
     description="Searches for restaurants and returns structured recommendation cards.",
     instruction=f"""
         Return the result in the following JSON format:

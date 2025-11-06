@@ -11,8 +11,8 @@ pip install -r requirements.txt
 # Start server
 python main.py
 
-# Test in terminal (new window)
-python test_client.py
+# Test agent
+python cli.py
 ```
 
 ## Features
@@ -103,3 +103,13 @@ open http://localhost:8000/docs
 ## License
 
 MIT
+
+# Main User flow
+1 Log in: Sign in with gmail 
+2 Sign up 
+3 Initialize convo based on user_id. /convo_init 
+4 Click on session /get_session
+5 User go to chat and click sent /sent
+6 User click vote 
+
+
