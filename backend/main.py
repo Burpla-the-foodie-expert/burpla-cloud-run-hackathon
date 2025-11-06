@@ -6,7 +6,7 @@ import os
 import json
 from dotenv import load_dotenv
 import uuid
-from agent.agent import run_conversation
+from backend.agent_gadk.orchestrator import run_conversation
 from db_services.chat import ChatManager
 from db_services.user import UserManager
 from db_services.convo import ConvoManager

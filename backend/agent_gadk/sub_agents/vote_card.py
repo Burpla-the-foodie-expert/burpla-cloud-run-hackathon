@@ -4,9 +4,9 @@ warnings.filterwarnings('ignore')
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from config import GEMINI_FLASH, GEMINI_PRO
-from agent.tools import generate_vote
+from agent_gadk.tools import generate_vote
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 load_dotenv(override=True)
 
@@ -40,7 +40,7 @@ class VoteResponse(BaseModel):
     """Response schema for the vote creation agent."""
     message_id: str = Field(..., description="Unique message ID of this vote response.")
     sender_name: str = Field(..., description="Name of the agent or user who initiated the vote.")
-    type: str = Field("vote_card", description="Always 'vote_card'.")
+    type: Literal["vote_card"] = Field(..., description="Always 'vote_card'")
     vote_options: List[VoteOption] = Field(..., description="List of restaurant options for voting.")
 
     class Config:
@@ -67,7 +67,7 @@ class VoteResponse(BaseModel):
 
 pipeline_vote_agent = Agent(
     name="pipeline_vote_agent",
-    model=GEMINI_PRO,
+    model=GEMINI_FLASH,
     description="Creates structured voting polls from restaurant IDs found in prior conversation.",
     instruction=f"""
         Extract all restaurant_id values from previous messages (typically from recommendation cards).
@@ -83,5 +83,4 @@ pipeline_vote_agent = Agent(
     """,
     tools=[generate_vote],
     output_schema=VoteResponse,
-    disallow_transfer_to_parent=True
 )

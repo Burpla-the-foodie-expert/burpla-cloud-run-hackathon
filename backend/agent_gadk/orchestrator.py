@@ -4,17 +4,17 @@ from google.adk.agents import Agent
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
-from agent.sub_agents.vote_card import pipeline_vote_agent
-from agent.sub_agents.recommendation_card import pipeline_recommendation_agent
+from agent_gadk.sub_agents.vote_card import pipeline_vote_agent
+from agent_gadk.sub_agents.recommendation_card import pipeline_recommendation_agent
 from config import GEMINI_PRO, GEMINI_FLASH
-from agent.tools import distance_matrix, google_places_text_search
+from agent_gadk.tools import distance_matrix, google_places_text_search
 
 warnings.filterwarnings('ignore')
 
 load_dotenv(override=True)
 
 root_agent = Agent(
-    name="food_recommendation_agent",
+    name="root_agent",
     model = GEMINI_FLASH,
     description="Your name is Burpla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
     instruction="""
@@ -92,6 +92,7 @@ async def call_agent_async(query: str, runner, user_id, session_id):
 
 async def run_conversation(query: str, app_name: str = "burpla", user_id: str = "something", session_id: str = "something"):
     try:
+        app_name = "burpla"
         session_key = (app_name, user_id, session_id)
         if session_key not in created_sessions:
             await session_service.create_session(
@@ -100,7 +101,7 @@ async def run_conversation(query: str, app_name: str = "burpla", user_id: str = 
                 session_id=session_id
             )
             created_sessions.add(session_key)
-
+        print(app_name)
         runner_agent_team = Runner(
             agent=root_agent,
             app_name=app_name,

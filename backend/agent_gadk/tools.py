@@ -33,9 +33,12 @@ def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> Non
         return {"error": f"Distance Matrix API Request failed: {e}"}
     return result
 
+import os
+import requests
+
 def google_places_text_search(text_query: str) -> dict:
     """
-        Searches for places using Google Places API based on a text query.
+        Searches for places using Google Places API (New) based on a text query.
         Args:
             text_query (str): The text query to search for places (e.g., "best pizza in New York").
         Returns:
@@ -44,7 +47,8 @@ def google_places_text_search(text_query: str) -> dict:
     api_key = os.getenv("GOOGLE_API_KEY")
     api_url = "https://places.googleapis.com/v1/places:searchText"
     
-    field_mask = "places.id,places.displayName,places.formattedAddress,places.priceLevel,places.rating,places.userRatingCount,places.types,photos"
+    # Corrected/Expanded Field Mask (standard best practice)
+    field_mask = "places.id,places.displayName,places.formattedAddress,places.priceLevel,places.rating,places.userRatingCount,places.types,places.photos,places.googleMapsUri"
 
     headers = {
         "Content-Type": "application/json",
@@ -57,32 +61,36 @@ def google_places_text_search(text_query: str) -> dict:
         response = requests.post(api_url, headers=headers, json=payload)
         response.raise_for_status()
         
-        result = {}
-        result["type"] = "recommendation"
-        options = []
+        result = {"type": "recommendation", "options": []}
 
-        for place in response.json()['places']:
+        # Check for the 'places' key in the response JSON
+        places = response.json().get('places', [])
 
+        for place in places:
             photo_uri = None
             if place.get("photos"):
+                # photos[0].name contains the photo resource name
                 photo_name = place["photos"][0].get("name")
                 if photo_name:
+                    # Construct the correct Photo Media URL
                     photo_uri = f"https://places.googleapis.com/v1/{photo_name}/media?key={api_key}&maxHeightPx=400&maxWidthPx=400"
 
             option = {
                 'restaurant_id': place.get('id', 'N/A'),
+                # Using .get('text') for nested displayName
                 'restaurant_name': place.get('displayName', {}).get('text', 'Unknown'),
                 'description': place.get('formattedAddress', 'Address not available'),
                 'image': photo_uri or "",
+                # Ensure fields are correctly fetched from the Place object
                 'rating': str(place.get('rating', 'N/A')),
                 'userRatingCount': place.get('userRatingCount', 0),
                 'formattedAddress': place.get('formattedAddress', 'N/A'),
                 'priceLevel': str(place.get('priceLevel', 'N/A')),
-                'map': f"https://www.google.com/maps/search/?api=1&query={place.get('displayName', {}).get('text', '')}&query_place_id={place.get('id', '')}"
+                # Using the correct, returned Google Maps URI
+                'map': place.get('googleMapsUri', 'N/A')
             }
-            options.append(option)
+            result['options'].append(option)
 
-        result['options'] = options
         return result
     except requests.exceptions.RequestException as e:
         return {"error": f"Places API Request failed: {e}", "type": "recommendation"}
@@ -150,3 +158,4 @@ def generate_vote(place_ids: List[str]) -> dict:
 
 
 
+print(google_places_text_search("best pizza in New York"))

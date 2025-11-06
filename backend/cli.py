@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from agent.agent import run_conversation
+from agent_gadk.orchestrator import run_conversation
 from db_services.chat import ChatManager
 
 async def main():
@@ -8,7 +8,7 @@ async def main():
     session_id = str(uuid.uuid4())
     session_id = "session_001"
     chat_manager = ChatManager()
-
+    print("🍔 Welcome to the Burpla CLI! Type your messages below (type 'exit' or 'quit' to leave):\n")
     while True:
         user_input = input("You: ").strip()
 
@@ -37,6 +37,8 @@ async def main():
         )
 
         print(f"\n🍔 Burpla: {response}\n")
+        if user_input.lower() in {"exit", "quit"}:
+            break
 
 if __name__ == "__main__":
     asyncio.run(main())

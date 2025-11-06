@@ -4,9 +4,9 @@ warnings.filterwarnings('ignore')
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from config import GEMINI_FLASH, GEMINI_PRO
-from agent.tools import google_places_text_search
+from agent_gadk.tools import google_places_text_search
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 load_dotenv(override=True)
 
@@ -40,7 +40,7 @@ class RecommendationOptions(BaseModel):
 
 class RecommendationResult(BaseModel):
     """Top-level response schema for the agent output."""
-    type: str = Field(..., description="Always 'recommendation_card'")
+    type: Literal["recommendation_card"] = Field(..., description="Always 'recommendation_card'")
     options: List[RecommendationOptions] = Field(..., description="List of restaurant recommendation cards")
 
     class Config:
@@ -68,5 +68,4 @@ pipeline_recommendation_agent = Agent(
     """,
     tools=[google_places_text_search],
     output_schema=RecommendationResult,
-    disallow_transfer_to_parent=True
 )
