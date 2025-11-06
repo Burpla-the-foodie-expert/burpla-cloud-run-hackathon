@@ -24,7 +24,7 @@ async def main():
 
         response = await run_conversation(
             query=user_input,
-            app_name="burbla",
+            app_name="burpla",
             user_id=user_id,
             session_id=session_id
         )
@@ -36,7 +36,7 @@ async def main():
             content=response
         )
 
-        print(f"\n🍔 Burbla: {response}\n")
+        print(f"\n🍔 Burpla: {response}\n")
 
 if __name__ == "__main__":
     asyncio.run(main())

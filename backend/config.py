@@ -9,5 +9,5 @@ GEMINI_FLASH = "gemini-2.0-flash"
 GEMINI_PRO = "gemini-2.5-pro"
 
 # Session Configuration
-DATABASE_PATH = "burbla.db"
-DEFAULT_APP_NAME = "burbla"
+DATABASE_PATH = "burpla.db"
+DEFAULT_APP_NAME = "burpla"

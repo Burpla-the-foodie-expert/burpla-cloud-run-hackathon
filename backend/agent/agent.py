@@ -16,9 +16,9 @@ load_dotenv(override=True)
 root_agent = Agent(
     name="food_recommendation_agent",
     model = GEMINI_FLASH,
-    description="Your name is Burbla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
+    description="Your name is Burpla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
     instruction="""
-        Your name is Burbla. You are the main Food Recommendation Agent coordinating a team. 
+        Your name is Burpla. You are the main Food Recommendation Agent coordinating a team. 
         Your primary responsibility is to provide food place recommendations, distance information, and generate vote requests, and answer other general questions.
 
         **Tools Available:**
@@ -90,7 +90,7 @@ async def call_agent_async(query: str, runner, user_id, session_id):
 
     return final_response_text
 
-async def run_conversation(query: str, app_name: str = "burbla", user_id: str = "something", session_id: str = "something"):
+async def run_conversation(query: str, app_name: str = "burpla", user_id: str = "something", session_id: str = "something"):
     try:
         session_key = (app_name, user_id, session_id)
         if session_key not in created_sessions:
