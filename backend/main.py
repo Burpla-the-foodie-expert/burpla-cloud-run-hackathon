@@ -16,11 +16,19 @@ load_dotenv(override=True)
 
 api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
-    raise ValueError("GOOGLE_API_KEY not found in environment. Check .env file.")
+    print("⚠️  WARNING: GOOGLE_API_KEY not found in environment. Some features may not work.")
+    api_key = "NOT_SET"
 
-chat_manager = ChatManager()
-user_manager = UserManager()
-convo_manager = ConvoManager()
+try:
+    chat_manager = ChatManager()
+    user_manager = UserManager()
+    convo_manager = ConvoManager()
+    print("✅ Database managers initialized successfully")
+except Exception as e:
+    print(f"⚠️  WARNING: Database initialization failed: {e}")
+    chat_manager = None
+    user_manager = None
+    convo_manager = None
 
 app = FastAPI(
     title="FastAPI Template",
@@ -65,9 +73,11 @@ class AgentMessage(BaseModel):
 @app.on_event("startup")
 async def startup():
     port = os.getenv("PORT", "8000")
-    print(f"✓ API Key loaded: {api_key[:10]}...")
-    print("✓ Server started successfully!")
-    print(f"✓ Docs available at: http://localhost:{port}/docs")
+    print(f"🚀 Starting FastAPI server on port {port}")
+    print(f"✓ API Key: {'configured' if api_key != 'NOT_SET' else 'missing'}")
+    print(f"✓ Database: {'connected' if chat_manager is not None else 'disconnected'}")
+    print(f"✓ Health check: http://localhost:{port}/health")
+    print(f"✓ Docs: http://localhost:{port}/docs")
 
 @app.get("/")
 async def root():
@@ -81,13 +91,21 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring service availability"""
-    return {"status": "healthy"}
+    status = {
+        "status": "healthy",
+        "api_key": "configured" if api_key != "NOT_SET" else "missing",
+        "database": "connected" if chat_manager is not None else "disconnected",
+        "port": os.getenv("PORT", "8000")
+    }
+    return status
 
 @app.get("/convo_init")
 async def get_all_conversations(user_id: str):
     """Retrieve all available conversations on application startup based on user ID
     Available Id: user_001, user_002, user_003
     """
+    if not convo_manager:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
     convos = convo_manager.list_convos_for_user(user_id)
     return convos
 
