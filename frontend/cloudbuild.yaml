@@ -1,0 +1,14 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "--tag"
+      - "northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/burpla/burpla-ui:sha-${_GITHUB_SHA}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_BACKEND_URL=${_BACKEND_URL}"
+      - "."
+images:
+  - "northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/burpla/burpla-ui:sha-${_GITHUB_SHA}"
+substitutions:
+  _BACKEND_URL: "http://localhost:8000" # Default value
+  _GITHUB_SHA: "latest" # Default value
