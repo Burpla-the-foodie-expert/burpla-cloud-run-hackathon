@@ -523,11 +523,13 @@ export function GroupChat({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              user_id: parseInt(userId) || 1,
+              // user_id: parseInt(userId) || 1,
+              user_id: "user_001",
               name: userName,
               message: messageContent,
               id: messageId,
               is_to_agent: true,
+              session_id: sessionId,
               // Backend doesn't support location/sessionId yet, but we'll include them for future compatibility
               // location: userLocation
               //   ? { lat: userLocation.lat, lng: userLocation.lng }

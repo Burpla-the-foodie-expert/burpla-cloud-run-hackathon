@@ -123,7 +123,7 @@ async def send_user_message(message: UserMessage):
         """
         print(query_wrapper)
         print(f"📝 Query: {query}")
-        response = await run_conversation(query, app_name="burbla", user_id=user_id, session_id=session_id)
+        response = await run_conversation(query, user_id=user_id, session_id=session_id)
         print(f"✅ Response: {response}")
 
         response_message_id = f'msm_{str(uuid.uuid4())}'
