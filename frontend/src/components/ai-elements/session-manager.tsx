@@ -41,7 +41,7 @@ export function SessionManager({
         }
       }
     }
-  }, []);
+  }, [onSessionChange, sessionId]);
 
   const createSession = async () => {
     const id = `${Math.random().toString(36).substring(2, 9)}-${Math.random().toString(36).substring(2, 9)}`;

@@ -402,7 +402,7 @@ function VotingCard({
 
                   {option.review && (
                     <p className="text-sm text-[#72767d] italic">
-                      "{option.review}"
+                      &quot;{option.review}&quot;
                     </p>
                   )}
 
@@ -439,7 +439,7 @@ function VotingCard({
                   </div>
                   {allowVoting && onVote && (
                     <button
-                      onClick={() => onVote(option.id)}
+                      onClick={() => onVote(option.id || "")}
                       className="px-3 py-1 bg-[#5865f2] hover:bg-[#4752c4] text-white text-sm rounded transition-colors"
                     >
                       Vote

@@ -117,7 +117,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
             Welcome to AI Chat
           </h1>
           <p className="text-[#72767d] text-sm">
-            Let's set up your profile to get started
+            Let&apos;s set up your profile to get started
           </p>
         </div>
 
