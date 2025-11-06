@@ -6,19 +6,21 @@ import os
 import json
 from dotenv import load_dotenv
 import uuid
-# from cloud_hack_agent import vote_agent
 from agent.agent import run_conversation
-import google.genai as genai
-from google.genai import types
+from db_services.chat import ChatManager
+from db_services.user import UserManager
+from db_services.convo import ConvoManager
+from fastapi.responses import Response
 
 load_dotenv(override=True)
 
-# Load API Key from environment
 api_key = os.getenv("GOOGLE_API_KEY")
 if not api_key:
     raise ValueError("GOOGLE_API_KEY not found in environment. Check .env file.")
 
-client = genai.Client(api_key=api_key)
+chat_manager = ChatManager()
+user_manager = UserManager()
+convo_manager = ConvoManager()
 
 app = FastAPI(
     title="FastAPI Template",
@@ -34,53 +36,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Sample Data
-with open('convo_sample.json') as f:
-    sample_conversation_content = json.load(f)
-
-conversations = [{
-    'convo_id': 1,
-    'convo_name': 'No Name',
-    'convo_user_ids': [1, 2, 3],
-    'convo_content': sample_conversation_content
-}]
-
-# Pydantic Models
-class ConversationList(BaseModel):
-    conversations: List[Dict[str, Any]] = Field(
-        default=[],
-        description="List of available conversations",
-        examples=[[{
-            "convo_id": 1,
-            "convo_name": "Dinner Planning",
-            "convo_user_ids": [1, 2, 3]
-        }]]
-    )
-
 class ConvoRequest(BaseModel):
-    convo_id: int = Field(default=0, description="Conversation ID to retrieve", examples=[1])
+    """Request to retrieve a specific conversation"""
+    convo_id: int = Field(default=0)
 
 class Conversation(BaseModel):
-    id: int = Field(description="Conversation ID", examples=[1])
-    name: str = Field(description="Conversation name", examples=["Dinner Planning"])
-    user_id_list: List[int] = Field(description="List of user IDs", examples=[[1, 2, 3]])
-    content: List[Dict[str, Any]] = Field(description="Message history", default=[])
+    """Conversation details with message history"""
+    id: int
+    name: str
+    user_id_list: List[int]
+    content: List[Dict[str, Any]] = Field(default=[])
 
 class UserMessage(BaseModel):
-    user_id: int = Field(default=1, description="User ID")
-    message: str = Field(description="Message text", examples=["Find me Italian restaurants in Houston 77083"])
-    message_id: str = Field(default="something", description="Message ID (auto-generated)")
-    session_id : str = Field(default="something", description="Session ID (auto-generated)")
-    is_to_agent: Optional[bool] = Field(default=True, description="If true, send to AI agent, otherwise, send to human")
+    """User message payload"""
+    user_id: str = Field(default="user_001")
+    message: str = Field(default="Some me top 5 restaurant nearby!")
+    message_id: str = Field(default=f'msg_{str(uuid.uuid4())}')
+    session_id: str = Field(default="")
+    is_to_agent: Optional[bool] = Field(default=True)
 
 class AgentMessage(BaseModel):
-    user_id: int = Field(default=0, description="Agent user ID")
-    name: str = Field(default="Burpla", description="Agent name")
-    message: str = Field(description="Agent response", examples=["I found 5 restaurants in Houston 77083!"])
-    message_id: str = Field(description="Message ID")
+    """Agent response message"""
+    user_id: str = Field(default=0)
+    name: str = Field(default="Burpla")
+    message: str
+    message_id: str
 
-# Endpoints
-    
 @app.on_event("startup")
 async def startup():
     print(f"✓ API Key loaded: {api_key[:10]}...")
@@ -96,73 +77,73 @@ async def root():
         "redoc": "/redoc"
     }
 
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring service availability"""
     return {"status": "healthy"}
 
+@app.get("/convo_init")
+async def get_all_conversations(user_id: str):
+    """Retrieve all available conversations on application startup based on user ID
+    Available Id: user_001, user_002, user_003
+    """
+    convos = convo_manager.list_convos_for_user(user_id)
+    return convos
 
-@app.get("/init", response_model=ConversationList)
-async def get_all_conversations():
-    """Retrieve all available conversations on application startup"""
-    res = []
-    for convo in conversations:
-        item = {}
-        for key in convo:
-            if key != 'convo_content':
-                item[key] = convo[key]
-        res.append(item)
-    return {"conversations": res}
-
-
-@app.post("/convo", response_model=Conversation)
-async def get_conversation_by_id(request: ConvoRequest):
-    """Retrieve a specific conversation by its ID"""
-    convo = next((c for c in conversations if c['convo_id'] == request.convo_id), None)
-
+@app.get("/get_session")
+async def get_conversation_session(session_id: str):
+    """Retrieve conversation session by session ID"""
+    convo = chat_manager.load_chat_history(session_id)
     if not convo:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    return {
-        "id": convo['convo_id'],
-        "name": convo['convo_name'],
-        "user_id_list": convo['convo_user_ids'],
-        "content": convo['convo_content']
-    }
-
+        return HTTPException(status_code=404, detail="Conversation session not found")
+    return convo
 
 @app.post("/sent", response_model=AgentMessage)
 async def send_user_message(message: UserMessage):
     """Send message to agent and wait for response"""
-    if message.is_to_agent:
-        message_id = str(uuid.uuid4())
-        query = message.message
-        user_id = str(message.user_id)
-        session_id = message.session_id
-        
-        print(f"📨 User {user_id} | Session {session_id}")
-        print(f"📝 Query: {query}")
+    query = message.message
+    user_id = str(message.user_id)
+    user_info = user_manager.get_user(user_id)
+    session_id = message.session_id
+    if not user_info:
+        return HTTPException(status_code=404, detail="User not found (Available users id: user_001, user_002, user_003)")
 
-        response = await run_conversation(query, app_name = "burbla", user_id = user_id, session_id = session_id)
+    chat_manager.save_chat_message(
+        session_id=session_id,
+        user_id=user_id,
+        message_id=f'msg_{str(uuid.uuid4())}',
+        content=query
+    )
+
+    if message.is_to_agent:
+        # Wrapper for user info
+        query_wrapper = f"""
+            Information about the user for more context: Name: {user_info[1]}, Preferences: {user_info[3]}, Location: {user_info[4]}
+            Query: {query}
+        """
+        print(query_wrapper)
+        print(f"📝 Query: {query}")
+        response = await run_conversation(query, app_name="burbla", user_id=user_id, session_id=session_id)
         print(f"✅ Response: {response}")
 
-        agent_message = AgentMessage(
-            user_id=0,
+        response_message_id = f'msm_{str(uuid.uuid4())}'
+        chat_manager.save_chat_message(
+            session_id=session_id,
+            user_id='bot',
+            message_id=response_message_id,
+            content=response
+        )
+        convo_manager.update_last_updated(session_id)
+
+        return AgentMessage(
+            user_id='bot',
             name="Burpla",
             message=response,
-            message_id=message_id
+            message_id=response_message_id
         )
-        return agent_message
-
-    else:
-        return AgentMessage(
-            user_id=0,
-            name="Burpla",
-            message="Message received",
-            message_id=message.message_id
-        )
-
+    
+    convo_manager.update_last_updated(session_id)
+    return Response(status_code=204) # No content response
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,20 +1,21 @@
-# @title Import necessary libraries
-import re, json
+import re, json, warnings, logging, os, sys, uuid
 from dotenv import load_dotenv
 from google.adk.agents import Agent
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
-from google.genai import types 
+from google.genai import types
 from agent.sub_agents.vote_card import pipeline_vote_agent
 from agent.sub_agents.recommendation_card import pipeline_recommendation_agent
-from config import SUB_MODEL_NAME
+from config import GEMINI_PRO, GEMINI_FLASH
 from agent.tools import distance_matrix, google_places_text_search
+
+warnings.filterwarnings('ignore')
 
 load_dotenv(override=True)
 
 root_agent = Agent(
     name="food_recommendation_agent",
-    model = SUB_MODEL_NAME,
+    model = GEMINI_FLASH,
     description="Your name is Burbla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
     instruction="""
         Your name is Burbla. You are the main Food Recommendation Agent coordinating a team. 
@@ -77,12 +78,8 @@ async def call_agent_async(query: str, runner, user_id, session_id):
     final_response_text = "Agent did not produce a final response."
 
     async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
-        if hasattr(event, 'author'):
-            print(f"  → Event from: {event.author}")
-
         if event.is_final_response():
             if event.content and event.content.parts:
-                # Loop through all parts to find text
                 for part in event.content.parts:
                     if hasattr(part, 'text') and part.text:
                         final_response_text = part.text.strip()
@@ -95,7 +92,6 @@ async def call_agent_async(query: str, runner, user_id, session_id):
 
 async def run_conversation(query: str, app_name: str = "burbla", user_id: str = "something", session_id: str = "something"):
     try:
-        # Create session if it doesn't exist
         session_key = (app_name, user_id, session_id)
         if session_key not in created_sessions:
             await session_service.create_session(
@@ -117,14 +113,14 @@ async def run_conversation(query: str, app_name: str = "burbla", user_id: str = 
             user_id = user_id,
             session_id = session_id
         )
-        # Clean up response if it's wrapped in code block
+
         if '```json' in response:
             response = re.sub(r"^```json\s*|\s*```$", "", response.strip())
         if response.startswith('{') or response.startswith('['):
             response = response.replace("\\", "\\\\")
             response = json.loads(response)
             response = str(response)
-        
+
         return response
 
     except Exception as e:

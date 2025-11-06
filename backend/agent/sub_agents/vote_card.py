@@ -1,7 +1,9 @@
-# @title Import necessary libraries
+import warnings
+warnings.filterwarnings('ignore')
+
 from dotenv import load_dotenv
 from google.adk.agents import Agent
-from config import SUB_MODEL_NAME
+from config import GEMINI_FLASH, GEMINI_PRO
 from agent.tools import generate_vote
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -56,7 +58,7 @@ class VoteResponse(BaseModel):
                         "image": "https://example.com/luigi.jpg",
                         "rating": "4.6",
                         "userRatingCount": 210,
-                        "number_of_vote": 8,
+                        "number_of_vote": 0,
                         "map": "https://maps.google.com/?q=Luigi’s+Trattoria"
                     }
                 ]
@@ -65,7 +67,7 @@ class VoteResponse(BaseModel):
 
 pipeline_vote_agent = Agent(
     name="pipeline_vote_agent",
-    model=SUB_MODEL_NAME,
+    model=GEMINI_PRO,
     description="Creates structured voting polls from restaurant IDs found in prior conversation.",
     instruction=f"""
         Extract all restaurant_id values from previous messages (typically from recommendation cards).
