@@ -29,7 +29,8 @@ jobs:
       - name: Build and Push Docker Image
         run: |-
           gcloud builds submit ./frontend \
-            --tag "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/burpla-ui:sha-${{ github.sha }}"
+            --tag "northamerica-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/burpla/burpla-ui:sha-${{ github.sha }}" \
+            --build-arg=NEXT_PUBLIC_BACKEND_URL="https://burpla-api-415080714475.northamerica-northeast1.run.app"
 
       - name: Deploy to Cloud Run
         run: |-
