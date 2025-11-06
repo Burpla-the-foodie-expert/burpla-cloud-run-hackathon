@@ -7,63 +7,7 @@ GOOGLE_GENAI_USE_VERTEXAI = FALSE
 
 GOOGLE_API_KEY = PASTE_YOUR_ACTUAL_API_KEY_HERE
 
-# Development
-
-## Running Both Services
-
-You can start both the backend and frontend development servers using one of the following methods:
-
-### Option 1: Using npm (Recommended)
-
-```bash
-# Install dependencies (first time only)
-npm install
-
-# Start both servers
-npm run dev
-```
-
-This will start:
-
-- Backend API on http://localhost:8000
-- Frontend app on http://localhost:3000
-
-### Option 2: Using the shell script
-
-```bash
-# Make sure the script is executable (first time only)
-chmod +x scripts/dev.sh
-
-# Run the script
-./scripts/dev.sh
-```
-
-### Running Services Separately
-
-If you prefer to run services separately:
-
-```bash
-# Backend only
-npm run dev:backend
-# or
-cd backend && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Frontend only
-npm run dev:frontend
-# or
-cd frontend && pnpm dev
-```
-
-## Installing Dependencies
-
-```bash
-# Install all dependencies (backend and frontend)
-npm run install:all
-
-# Or install separately
-npm run install:backend  # Installs Python dependencies with Poetry
-npm run install:frontend # Installs Node.js dependencies with pnpm
-```
+// TODO And Frontend
 
 ### Backend Setup with Poetry
 
