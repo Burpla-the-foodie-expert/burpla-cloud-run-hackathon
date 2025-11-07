@@ -92,42 +92,42 @@ export function DiscordChat({
     });
 
   return (
-    <div className="flex flex-col h-screen bg-[#36393f]">
+    <div className="flex flex-col h-screen bg-[#121212]">
       {/* Channel header */}
-      <div className="h-12 border-b border-[#2f3136] flex items-center px-4 shadow-sm">
-        <Hash className="w-5 h-5 text-[#72767d] mr-2" />
-        <span className="text-white font-semibold">ai-chat</span>
-        <span className="ml-2 text-xs text-[#72767d]">
+      <div className="h-12 border-b border-[#333333] flex items-center px-4 shadow-sm bg-[#1e1e1e]">
+        <Hash className="w-5 h-5 text-[#9e9e9e] mr-2" />
+        <span className="text-[#e0e0e0] font-semibold">ai-chat</span>
+        <span className="ml-2 text-xs text-[#9e9e9e]">
           AI-powered conversations
         </span>
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 bg-[#121212]">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="text-[#72767d] text-lg mb-2">
+              <div className="text-[#9e9e9e] text-lg mb-2">
                 Welcome to #ai-chat
               </div>
-              <div className="text-[#72767d] text-sm">
+              <div className="text-[#9e9e9e] text-sm">
                 Start a conversation by typing a message below
               </div>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {groupedMessages.map((group, groupIndex) => (
               <div
                 key={groupIndex}
-                className="group hover:bg-[#32353b] rounded px-4 py-1 -mx-4 transition-colors"
+                className="group hover:bg-[#1e1e1e] rounded-lg px-4 py-3 mb-3 transition-colors bg-[#2a2a2a]"
               >
-                <div className="flex gap-4">
+                <div className="flex gap-3">
                   {/* Avatar */}
                   <div className="flex-shrink-0">
                     {group.role === "user" ? (
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium border border-white/10"
                         style={{ backgroundColor: group.avatarColor }}
                       >
                         {group.avatar.length > 2
@@ -136,7 +136,7 @@ export function DiscordChat({
                       </div>
                     ) : (
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white border border-white/10"
                         style={{ backgroundColor: group.avatarColor }}
                       >
                         <Bot className="w-6 h-6" />
@@ -147,19 +147,19 @@ export function DiscordChat({
                   {/* Message content */}
                   <div className="flex-1 min-w-0">
                     {/* Author and timestamp */}
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-base font-medium text-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-[#e0e0e0]">
                         {group.author}
                       </span>
-                      <span className="text-xs text-[#72767d]">
+                      <span className="text-xs text-[#9e9e9e]">
                         {format(new Date(), "h:mm a")}
                       </span>
                     </div>
 
                     {/* Messages in group */}
                     {group.messages.map((message) => (
-                      <div key={message.id} className="mb-1 last:mb-0">
-                        <div className="text-[#dcddde] text-base whitespace-pre-wrap break-words">
+                      <div key={message.id} className="mb-2 last:mb-0">
+                        <div className="text-[#e0e0e0] text-sm whitespace-pre-wrap break-words">
                           {message.content}
                         </div>
                       </div>
@@ -171,11 +171,11 @@ export function DiscordChat({
 
             {/* Loading indicator */}
             {isLoading && (
-              <div className="group hover:bg-[#32353b] rounded px-4 py-1 -mx-4 transition-colors">
-                <div className="flex gap-4">
+              <div className="group hover:bg-[#1e1e1e] rounded-lg px-4 py-3 mb-3 transition-colors bg-[#2a2a2a]">
+                <div className="flex gap-3">
                   <div className="flex-shrink-0">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white border border-white/10"
                       style={{
                         backgroundColor: getAvatarColor("AI Assistant"),
                       }}
@@ -184,18 +184,18 @@ export function DiscordChat({
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-base font-medium text-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-[#e0e0e0]">
                         AI Assistant
                       </span>
-                      <span className="text-xs text-[#72767d]">
+                      <span className="text-xs text-[#9e9e9e]">
                         {format(new Date(), "h:mm a")}
                       </span>
                     </div>
                     <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-[#72767d] rounded-full animate-bounce"></span>
-                      <span className="w-2 h-2 bg-[#72767d] rounded-full animate-bounce delay-75"></span>
-                      <span className="w-2 h-2 bg-[#72767d] rounded-full animate-bounce delay-150"></span>
+                      <span className="w-2 h-2 bg-[#9e9e9e] rounded-full animate-bounce"></span>
+                      <span className="w-2 h-2 bg-[#9e9e9e] rounded-full animate-bounce delay-75"></span>
+                      <span className="w-2 h-2 bg-[#9e9e9e] rounded-full animate-bounce delay-150"></span>
                     </div>
                   </div>
                 </div>
@@ -206,22 +206,22 @@ export function DiscordChat({
       </div>
 
       {/* Input area */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-4 bg-[#1e1e1e] border-t border-[#333333]">
         <form onSubmit={handleSubmit} className="relative">
-          <div className="bg-[#40444b] rounded-lg px-4 py-3 flex items-center gap-3">
+          <div className="bg-[#2a2a2a] rounded-lg px-4 py-3 flex items-center gap-3 border border-[#333333]">
             <div className="flex-1">
               <input
                 value={input}
                 onChange={handleInputChange}
                 placeholder={`Message #ai-chat`}
-                className="w-full bg-transparent text-[#dcddde] placeholder-[#72767d] text-base outline-none resize-none"
+                className="w-full bg-transparent text-[#e0e0e0] placeholder-[#9e9e9e] text-base outline-none resize-none"
                 disabled={isLoading}
               />
             </div>
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-2 text-[#b9bbbe] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 text-[#9e9e9e] hover:text-[#9c27b0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-5 h-5" />
             </button>

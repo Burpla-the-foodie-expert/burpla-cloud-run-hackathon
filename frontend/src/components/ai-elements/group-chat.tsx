@@ -707,29 +707,29 @@ export function GroupChat({
   });
 
   return (
-    <div className="flex flex-col h-screen bg-[#36393f]">
+    <div className="flex flex-col h-screen bg-[#121212]">
       {/* Channel header */}
-      <div className="h-12 border-b border-[#2f3136] flex items-center px-4 shadow-sm">
-        <Hash className="w-5 h-5 text-[#72767d] mr-2" />
-        <span className="text-white font-semibold">group-chat</span>
-        <span className="ml-2 text-xs text-[#72767d]">
+      <div className="h-12 border-b border-[#333333] flex items-center px-4 shadow-sm bg-[#1e1e1e]">
+        <Hash className="w-5 h-5 text-[#9e9e9e] mr-2" />
+        <span className="text-[#e0e0e0] font-semibold">group-chat</span>
+        <span className="ml-2 text-xs text-[#9e9e9e]">
           Session: {sessionId.substring(0, 8)}...
         </span>
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 bg-[#121212]">
         {groupedMessages.length === 0 && !isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="text-[#72767d] text-lg mb-2">Welcome!</div>
-              <div className="text-[#72767d] text-sm">
+              <div className="text-[#9e9e9e] text-lg mb-2">Welcome!</div>
+              <div className="text-[#9e9e9e] text-sm">
                 Start a conversation by typing a message below
               </div>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {groupedMessages.map((group, groupIndex) => {
               const isBot =
                 group.userId === "burpla" ||
@@ -752,11 +752,11 @@ export function GroupChat({
 
             {/* Loading indicator when bot is responding */}
             {isLoading && (
-              <div className="group hover:bg-[#32353b] rounded px-4 py-1 -mx-4 transition-colors">
-                <div className="flex gap-4">
+              <div className="group hover:bg-[#1e1e1e] rounded-lg px-4 py-3 mb-3 transition-colors bg-[#2a2a2a]">
+                <div className="flex gap-3">
                   <div className="flex-shrink-0">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white"
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white border border-white/10"
                       style={{
                         backgroundColor: getAvatarColor("Burpla"),
                       }}
@@ -765,18 +765,18 @@ export function GroupChat({
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-base font-medium text-white">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-[#e0e0e0]">
                         Burpla
                       </span>
-                      <span className="text-xs text-[#72767d]">
+                      <span className="text-xs text-[#9e9e9e]">
                         {format(new Date(), "h:mm a")}
                       </span>
                     </div>
                     <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-[#72767d] rounded-full animate-bounce"></span>
-                      <span className="w-2 h-2 bg-[#72767d] rounded-full animate-bounce delay-75"></span>
-                      <span className="w-2 h-2 bg-[#72767d] rounded-full animate-bounce delay-150"></span>
+                      <span className="w-2 h-2 bg-[#9e9e9e] rounded-full animate-bounce"></span>
+                      <span className="w-2 h-2 bg-[#9e9e9e] rounded-full animate-bounce delay-75"></span>
+                      <span className="w-2 h-2 bg-[#9e9e9e] rounded-full animate-bounce delay-150"></span>
                     </div>
                   </div>
                 </div>
@@ -789,22 +789,22 @@ export function GroupChat({
       </div>
 
       {/* Input area */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-4 bg-[#1e1e1e] border-t border-[#333333]">
         {/* Auto-mention checkbox */}
         <div className="mb-2 flex items-center gap-2">
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-[#b9bbbe] hover:text-white transition-colors">
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-[#9e9e9e] hover:text-[#e0e0e0] transition-colors">
             <input
               type="checkbox"
               checked={autoMentionBurpla}
               onChange={(e) => setAutoMentionBurpla(e.target.checked)}
-              className="w-4 h-4 rounded border-[#40444b] bg-[#40444b] text-[#5865f2] focus:ring-2 focus:ring-[#5865f2] focus:ring-offset-2 focus:ring-offset-[#36393f] cursor-pointer"
+              className="w-4 h-4 rounded border-[#333333] bg-[#2a2a2a] text-[#9c27b0] focus:ring-2 focus:ring-[#9c27b0] focus:ring-offset-2 focus:ring-offset-[#1e1e1e] cursor-pointer"
             />
             <span>Continue mentioning @burpla</span>
           </label>
         </div>
 
         <form onSubmit={handleSubmit} className="relative">
-          <div className="bg-[#40444b] rounded-lg px-4 py-3 flex items-center gap-3">
+          <div className="bg-[#2a2a2a] rounded-lg px-4 py-3 flex items-center gap-3 border border-[#333333]">
             <div className="flex-1 relative">
               <input
                 ref={inputRef}
@@ -812,7 +812,7 @@ export function GroupChat({
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={`Message #group-chat`}
-                className="w-full bg-transparent text-[#dcddde] placeholder-[#72767d] text-base outline-none resize-none"
+                className="w-full bg-transparent text-[#e0e0e0] placeholder-[#9e9e9e] text-base outline-none resize-none"
                 disabled={isLoading}
               />
 
@@ -820,10 +820,10 @@ export function GroupChat({
               {showMentions && (
                 <div
                   ref={mentionsRef}
-                  className="absolute bottom-full left-0 mb-2 w-full max-w-md bg-[#2f3136] border border-[#40444b] rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto"
+                  className="absolute bottom-full left-0 mb-2 w-full max-w-md bg-[#2a2a2a] border border-[#333333] rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto"
                 >
                   <div className="p-2">
-                    <div className="text-xs text-[#72767d] px-2 py-1 mb-1">
+                    <div className="text-xs text-[#9e9e9e] px-2 py-1 mb-1">
                       Mention someone
                     </div>
                     {getMentionOptions().map((option, index) => (
@@ -833,8 +833,8 @@ export function GroupChat({
                         onClick={() => insertMention(option)}
                         className={`w-full flex items-center gap-2 px-2 py-2 rounded text-left transition-colors ${
                           index === mentionIndex
-                            ? "bg-[#5865f2] text-white"
-                            : "text-[#dcddde] hover:bg-[#40444b]"
+                            ? "bg-[#9c27b0] text-white"
+                            : "text-[#e0e0e0] hover:bg-[#333333]"
                         }`}
                       >
                         {option.isBot ? (
@@ -844,14 +844,14 @@ export function GroupChat({
                         )}
                         <span className="font-medium">{option.name}</span>
                         {option.isBot && (
-                          <span className="text-xs text-[#72767d] ml-auto">
+                          <span className="text-xs text-[#9e9e9e] ml-auto">
                             Bot
                           </span>
                         )}
                       </button>
                     ))}
                     {getMentionOptions().length === 0 && (
-                      <div className="px-2 py-2 text-[#72767d] text-sm">
+                      <div className="px-2 py-2 text-[#9e9e9e] text-sm">
                         No matches found
                       </div>
                     )}
@@ -862,7 +862,7 @@ export function GroupChat({
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-2 text-[#b9bbbe] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 text-[#9e9e9e] hover:text-[#9c27b0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-5 h-5" />
             </button>

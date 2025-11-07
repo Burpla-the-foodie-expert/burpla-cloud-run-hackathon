@@ -73,11 +73,11 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
   )
 
   return (
-    <div className="w-60 bg-[#2f3136] flex flex-col h-screen">
+    <div className="w-60 bg-[#1e1e1e] flex flex-col h-screen border-l border-[#333333]">
       {/* Header */}
-      <div className="h-12 border-b border-[#202225] flex items-center px-4 shadow-sm">
-        <Users className="w-5 h-5 text-[#72767d] mr-2" />
-        <span className="text-white font-semibold text-sm">
+      <div className="h-12 border-b border-[#333333] flex items-center px-4 shadow-sm bg-[#2a2a2a]">
+        <Users className="w-5 h-5 text-[#9e9e9e] mr-2" />
+        <span className="text-[#e0e0e0] font-semibold text-sm">
           Members — {users.length}
         </span>
       </div>
@@ -87,7 +87,7 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
         {/* Bot users */}
         {botUsers.length > 0 && (
           <div className="px-2 mb-4">
-            <div className="text-xs font-semibold text-[#8e9297] uppercase tracking-wide mb-2 px-2">
+            <div className="text-xs font-semibold text-[#9e9e9e] uppercase tracking-wide mb-2 px-2">
               Bots
             </div>
             {botUsers.map((user) => {
@@ -102,18 +102,18 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
               return (
                 <div
                   key={user.id}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#393c43] transition-colors group"
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#333333] transition-colors group"
                 >
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 border border-white/10"
                     style={{ backgroundColor: avatarColor }}
                   >
                     <Bot className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white flex items-center gap-1.5">
+                    <div className="text-sm font-medium text-[#e0e0e0] flex items-center gap-1.5">
                       {user.name}
-                      <span className="text-xs text-[#72767d]">Bot</span>
+                      <span className="text-xs text-[#9e9e9e]">Bot</span>
                     </div>
                   </div>
                 </div>
@@ -125,7 +125,7 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
         {/* Regular users */}
         {regularUsers.length > 0 && (
           <div className="px-2">
-            <div className="text-xs font-semibold text-[#8e9297] uppercase tracking-wide mb-2 px-2">
+            <div className="text-xs font-semibold text-[#9e9e9e] uppercase tracking-wide mb-2 px-2">
               Online — {regularUsers.length}
             </div>
             {regularUsers.map((user) => {
@@ -139,21 +139,21 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
               return (
                 <div
                   key={user.id}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#393c43] transition-colors group ${
-                    isCurrentUser ? 'bg-[#393c43]' : ''
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#333333] transition-colors group ${
+                    isCurrentUser ? 'bg-[#333333]' : ''
                   }`}
                 >
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0 border border-white/10"
                     style={{ backgroundColor: avatarColor }}
                   >
                     {avatar}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white flex items-center gap-1.5">
+                    <div className="text-sm font-medium text-[#e0e0e0] flex items-center gap-1.5">
                       {user.name}
                       {isCurrentUser && (
-                        <span className="text-xs text-[#72767d]">(You)</span>
+                        <span className="text-xs text-[#9e9e9e]">(You)</span>
                       )}
                     </div>
                   </div>
@@ -166,7 +166,7 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
         {/* Empty state */}
         {users.length === 0 && (
           <div className="px-4 py-8 text-center">
-            <div className="text-[#72767d] text-sm">No users in session</div>
+            <div className="text-[#9e9e9e] text-sm">No users in session</div>
           </div>
         )}
       </div>

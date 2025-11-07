@@ -73,8 +73,8 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <main className="flex h-screen w-screen items-center justify-center bg-[#202225]">
-        <div className="text-[#72767d]">Loading...</div>
+      <main className="flex h-screen w-screen items-center justify-center bg-[#121212]">
+        <div className="text-[#9e9e9e]">Loading...</div>
       </main>
     )
   }

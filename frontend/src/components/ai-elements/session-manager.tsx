@@ -121,15 +121,15 @@ export function SessionManager({
 
   if (!showModal && sessionId) {
     return (
-      <div className="h-12 border-b border-[#2f3136] flex items-center justify-between px-4 bg-[#2f3136]">
+      <div className="h-12 border-b border-[#333333] flex items-center justify-between px-4 bg-[#1e1e1e]">
         <div className="flex items-center gap-2">
-          <Hash className="w-4 h-4 text-[#72767d]" />
-          <span className="text-sm text-[#72767d]">Session:</span>
-          <span className="text-sm font-mono text-white">{sessionId}</span>
+          <Hash className="w-4 h-4 text-[#9e9e9e]" />
+          <span className="text-sm text-[#9e9e9e]">Session:</span>
+          <span className="text-sm font-mono text-[#e0e0e0]">{sessionId}</span>
         </div>
         <button
           onClick={copySessionLink}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-[#b9bbbe] hover:text-white hover:bg-[#40444b] rounded transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-[#9e9e9e] hover:text-[#9c27b0] hover:bg-[#333333] rounded transition-colors"
           title="Copy session link"
         >
           {copied ? (
@@ -152,14 +152,14 @@ export function SessionManager({
     <>
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#2f3136] rounded-lg shadow-xl max-w-md w-full mx-4 border border-[#40444b]">
+          <div className="bg-[#2a2a2a] rounded-lg shadow-xl max-w-md w-full mx-4 border border-[#333333]">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#40444b]">
+            <div className="flex items-center justify-between p-4 border-b border-[#333333]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#5865f2] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-[#9c27b0] flex items-center justify-center">
                   <Users className="w-5 h-5 text-white" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-[#e0e0e0]">
                   {sessionId ? "Join Session" : "Start Session"}
                 </h2>
               </div>
@@ -167,7 +167,7 @@ export function SessionManager({
 
             {/* Content */}
             <div className="p-6 space-y-4">
-              <p className="text-[#dcddde] text-sm">
+              <p className="text-[#9e9e9e] text-sm">
                 {sessionId
                   ? "Join an existing chat session by entering the session ID, or create a new one."
                   : "Create a new group chat session or join an existing one."}
@@ -176,7 +176,7 @@ export function SessionManager({
               <div className="space-y-3">
                 <button
                   onClick={createSession}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#5865f2] hover:bg-[#4752c4] text-white font-medium rounded-lg transition-colors"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#9c27b0] hover:bg-[#7b1fa2] text-white font-medium rounded-lg transition-colors"
                 >
                   <Plus className="w-5 h-5" />
                   Create New Session
@@ -184,21 +184,21 @@ export function SessionManager({
 
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Hash className="w-5 h-5 text-[#72767d]" />
+                    <Hash className="w-5 h-5 text-[#9e9e9e]" />
                   </div>
                   <input
                     type="text"
                     value={newSessionId}
                     onChange={(e) => setNewSessionId(e.target.value)}
                     placeholder="Enter session ID to join"
-                    className="w-full pl-10 pr-4 py-3 bg-[#40444b] border border-[#202225] rounded-lg text-white placeholder-[#72767d] focus:outline-none focus:ring-2 focus:ring-[#5865f2] focus:border-transparent transition-all font-mono text-sm"
+                    className="w-full pl-10 pr-4 py-3 bg-[#1e1e1e] border border-[#333333] rounded-lg text-[#e0e0e0] placeholder-[#9e9e9e] focus:outline-none focus:ring-2 focus:ring-[#9c27b0] focus:border-transparent transition-all font-mono text-sm"
                   />
                 </div>
 
                 <button
                   onClick={joinSession}
                   disabled={!newSessionId.trim()}
-                  className="w-full px-4 py-3 bg-[#40444b] hover:bg-[#36393f] text-[#dcddde] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-3 bg-[#333333] hover:bg-[#2a2a2a] text-[#e0e0e0] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Join Session
                 </button>
