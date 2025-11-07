@@ -75,3 +75,6 @@ Secrets:
 GCP_PROJECT_ID = burpla
 GCP_SA_EMAIL = github-actions-deployer@burpla.iam.gserviceaccount.com
 GCP_WIF_PROVIDER = projects/415080714475/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+
+https://console.cloud.google.com/run?project=burpla
+https://burpla-ui-415080714475.northamerica-northeast1.run.app/?session=2ajlkhw-dqf8ph4
