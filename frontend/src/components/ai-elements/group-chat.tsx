@@ -10,6 +10,7 @@ import type { InteractiveCardConfig } from "./interactive-card";
 import {
   convertConvoMessagesToGroupChatMessages,
   extractUsersFromConvoMessages,
+  parseMessageForCard,
   type ConvoMessage,
 } from "@/lib/conversation-utils";
 import { getApiUrl } from "@/lib/api-config";
@@ -117,25 +118,56 @@ export function GroupChat({
   const mentionsRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
-  // Fetch session users
+  // Load initial messages and users on mount
   useEffect(() => {
     if (!sessionId) return;
 
-    const fetchUsers = async () => {
+    const loadInitialData = async () => {
       try {
+        // Load all messages (no lastMessageId filter on initial load)
         const response = await fetch(`/api/sessions?sessionId=${sessionId}`);
         if (response.ok) {
           const data = await response.json();
+
+          // Load all messages on initial mount
+          if (data.messages && data.messages.length > 0) {
+            setMessages((prev) => {
+              // Merge with existing messages, avoiding duplicates
+              const existingIds = new Set(prev.map((m) => m.id));
+              const newMessages = data.messages.filter(
+                (msg: Message) => !existingIds.has(msg.id)
+              );
+
+              if (newMessages.length > 0) {
+                const combined = [...prev, ...newMessages];
+                const sorted = combined.sort(
+                  (a, b) => a.timestamp - b.timestamp
+                );
+
+                // Update lastMessageId
+                if (sorted.length > 0) {
+                  const lastId = sorted[sorted.length - 1].id;
+                  lastMessageIdRef.current = lastId;
+                  setLastMessageId(lastId);
+                }
+
+                return sorted;
+              }
+              return prev;
+            });
+          }
+
+          // Update users list
           if (data.users) {
             setSessionUsers(data.users);
           }
         }
       } catch (error) {
-        console.error("Failed to fetch users:", error);
+        console.error("Failed to load initial data:", error);
       }
     };
 
-    fetchUsers();
+    loadInitialData();
   }, [sessionId]);
 
   // Poll for new messages and users
@@ -312,147 +344,6 @@ export function GroupChat({
     return mentionRegex.test(text);
   };
 
-  // Parse Python dict string to JavaScript object
-  // Handles strings like: "{'type': 'recommendation_card', 'options': [...], 'error': None}"
-  const parsePythonDict = (str: string): any => {
-    try {
-      // Replace Python None with null (before quote replacement)
-      let jsonStr = str.replace(/None/g, "null");
-
-      // Handle escaped double quotes in strings (like \"Pho X Trang's\")
-      // First, replace escaped double quotes with a temporary placeholder
-      jsonStr = jsonStr.replace(/\\"/g, "___ESCAPED_QUOTE___");
-
-      // Replace single quotes with double quotes
-      jsonStr = jsonStr.replace(/'/g, '"');
-
-      // Restore the escaped double quotes (now they're regular escaped quotes)
-      jsonStr = jsonStr.replace(/___ESCAPED_QUOTE___/g, '\\"');
-
-      // Try to parse
-      const parsed = JSON.parse(jsonStr);
-      return parsed;
-    } catch (error) {
-      console.error("Failed to parse Python dict:", error, str);
-      // If parsing fails, try a more permissive approach using Function constructor
-      // This handles Python dict syntax more accurately (note: input is from our own backend, so safe)
-      try {
-        let pythonStr = str
-          .replace(/None/g, "null")
-          .replace(/True/g, "true")
-          .replace(/False/g, "false");
-        const func = new Function("return " + pythonStr);
-        return func();
-      } catch (fallbackError) {
-        console.error("Fallback parsing also failed:", fallbackError);
-        return null;
-      }
-    }
-  };
-
-  // Convert backend recommendation card format to InteractiveCardConfig
-  const convertRecommendationCard = (
-    data: any
-  ): InteractiveCardConfig | undefined => {
-    if (!data || data.type !== "recommendation_card" || !data.options) {
-      return undefined;
-    }
-
-    // If there's an error, don't show the card
-    if (data.error) {
-      console.warn("Recommendation card has error:", data.error);
-      return undefined;
-    }
-
-    const restaurants = data.options.map((opt: any) => {
-      // Convert price level string to number if possible
-      let priceLevel: number | undefined;
-      if (opt.priceLevel && opt.priceLevel !== "N/A") {
-        // Map price level strings to numbers
-        const priceLevelMap: Record<string, number> = {
-          PRICE_LEVEL_FREE: 0,
-          PRICE_LEVEL_INEXPENSIVE: 1,
-          PRICE_LEVEL_MODERATE: 2,
-          PRICE_LEVEL_EXPENSIVE: 3,
-          PRICE_LEVEL_VERY_EXPENSIVE: 4,
-        };
-        priceLevel = priceLevelMap[opt.priceLevel] ?? undefined;
-      }
-
-      // Convert rating string to number
-      const rating = opt.rating ? parseFloat(opt.rating) : undefined;
-
-      return {
-        id: opt.restaurant_id || undefined,
-        name: opt.restaurant_name,
-        address: opt.formattedAddress || opt.description,
-        formattedAddress: opt.formattedAddress || opt.description,
-        rating: rating,
-        userRatingCount: opt.userRatingCount,
-        priceLevel: priceLevel,
-        photoUri: opt.image || undefined,
-        googleMapsUri: opt.map,
-        hyperlink: opt.map,
-      };
-    });
-
-    return {
-      type: "restaurant_recommendation",
-      config: {
-        restaurants,
-        userLocation: userLocation
-          ? { lat: userLocation.lat, lng: userLocation.lng }
-          : undefined,
-        title: "Restaurant Recommendations",
-      },
-    };
-  };
-
-  // Convert backend voting card format to InteractiveCardConfig
-  const convertVotingCard = (data: any): InteractiveCardConfig | undefined => {
-    if (!data || data.type !== "vote_card" || !data.vote_options) {
-      return undefined;
-    }
-
-    // Convert vote options to the format expected by VotingCardConfig
-    const options = data.vote_options.map((opt: any) => {
-      // Convert rating string to number
-      const rating = opt.rating ? parseFloat(opt.rating) : undefined;
-
-      return {
-        id: opt.restaurant_id || undefined,
-        restaurant_id: opt.restaurant_id || undefined,
-        name: opt.restaurant_name,
-        restaurant_name: opt.restaurant_name,
-        description: opt.description,
-        image: opt.image || undefined,
-        photoUri: opt.image || undefined,
-        votes: opt.number_of_vote || 0,
-        number_of_vote: opt.number_of_vote || 0,
-        map: opt.map,
-        googleMapsUri: opt.map,
-        hyperlink: opt.map,
-        rating: rating,
-        userRatingCount: opt.userRatingCount,
-      };
-    });
-
-    // Calculate total votes
-    const totalVotes = options.reduce((sum: number, opt: any) => {
-      return sum + (opt.votes || opt.number_of_vote || 0);
-    }, 0);
-
-    return {
-      type: "voting",
-      config: {
-        question: "Vote for your favorite restaurant:",
-        options,
-        totalVotes,
-        allowVoting: false, // Set to true if you want to enable voting functionality
-      },
-    };
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -541,35 +432,10 @@ export function GroupChat({
             const sentData = await sentResponse.json();
 
             // Parse the message to check if it contains a card (recommendation or voting)
-            let cardConfig: InteractiveCardConfig | undefined = undefined;
-            let messageContent = sentData.message || "";
-
-            // Try to parse the message as a Python dict string
-            // Check if message looks like a Python dict (starts with { and contains 'type')
-            if (
-              messageContent.trim().startsWith("{") &&
-              messageContent.includes("'type'")
-            ) {
-              const parsedData = parsePythonDict(messageContent);
-              if (parsedData) {
-                // Check for recommendation card
-                if (parsedData.type === "recommendation_card") {
-                  cardConfig = convertRecommendationCard(parsedData);
-                  if (cardConfig) {
-                    // Set a user-friendly message content when we have a card
-                    messageContent = `Here are some restaurant recommendations:`;
-                  }
-                }
-                // Check for voting card
-                else if (parsedData.type === "vote_card") {
-                  cardConfig = convertVotingCard(parsedData);
-                  if (cardConfig) {
-                    // Set a user-friendly message content when we have a voting card
-                    messageContent = `Vote for your favorite restaurant:`;
-                  }
-                }
-              }
-            }
+            const { content: messageContent, cardConfig } = parseMessageForCard(
+              sentData.message || "",
+              userLocation || null
+            );
 
             // Create message with cardConfig if available
             // Backend returns: { user_id, name, message, id }
@@ -598,6 +464,7 @@ export function GroupChat({
                   userId: "burpla",
                   message: messageContent, // Use processed messageContent instead of raw sentData.message
                   messageId: sentData.id || messageId,
+                  cardConfig: cardConfig, // Include cardConfig if available
                 }),
               });
             } catch (sessionError) {

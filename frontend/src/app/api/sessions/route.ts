@@ -1,10 +1,129 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sessions, type Session, type SessionMessage, type SessionUser } from "@/lib/session-store";
+import { getApiUrl } from "@/lib/api-config";
+import { parseMessageForCard } from "@/lib/conversation-utils";
 
 // Sessions are stored in the shared session-store module for access across API routes
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Load messages from backend database and convert to frontend format
+ */
+async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessage[]> {
+  try {
+    const backendUrl = getApiUrl(`/get_session?session_id=${encodeURIComponent(sessionId)}`);
+    const response = await fetch(backendUrl, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      console.warn(`Failed to load session ${sessionId} from backend:`, response.status);
+      return [];
+    }
+
+    const backendMessages = await response.json();
+    if (!Array.isArray(backendMessages)) {
+      return [];
+    }
+
+    // Convert backend format to frontend format
+    return backendMessages.map((msg: any) => {
+      // Backend format: { session_id, user_id, message_id, content, timestamp }
+      // Frontend format: { id, userId, userName, content, role, timestamp, cardConfig? }
+      const isBot = msg.user_id === "bot" || msg.user_id === "burpla";
+      const timestamp = msg.timestamp
+        ? new Date(msg.timestamp).getTime()
+        : Date.now();
+
+      // Parse card information from bot messages
+      let content = msg.content || "";
+      let cardConfig: any = undefined;
+
+      if (isBot && content) {
+        // Parse message content to extract card information
+        const parsed = parseMessageForCard(content, undefined); // userLocation not available in server-side route
+        content = parsed.content;
+        cardConfig = parsed.cardConfig;
+      }
+
+      return {
+        id: msg.message_id || generateId(),
+        userId: msg.user_id || "unknown",
+        userName: isBot ? "Burpla" : msg.user_id || "Unknown",
+        content,
+        role: isBot ? ("assistant" as const) : ("user" as const),
+        timestamp,
+        ...(cardConfig && { cardConfig }), // Only include cardConfig if it exists
+      };
+    });
+  } catch (error) {
+    console.error(`Error loading messages from backend for session ${sessionId}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Save message to backend database
+ * Note: Backend requires valid user IDs (user_001, user_002, user_003)
+ * For frontend-generated user IDs, we use a fallback user_id
+ */
+async function saveMessageToBackend(
+  sessionId: string,
+  userId: string,
+  messageId: string,
+  content: string
+): Promise<void> {
+  try {
+    // Only save user messages to backend (bot messages are saved by the backend /sent endpoint)
+    if (userId === "burpla" || userId === "ai" || userId === "bot") {
+      return; // Bot messages are handled by backend /sent endpoint
+    }
+
+    // Backend requires specific user IDs (user_001, user_002, user_003)
+    // Use a fallback if the userId doesn't match the expected format
+    const backendUserId = userId.startsWith("user_") ? userId : "user_001";
+
+    const backendUrl = getApiUrl("/sent");
+    const response = await fetch(backendUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: backendUserId,
+        message: content,
+        message_id: messageId,
+        session_id: sessionId,
+        is_to_agent: false, // Don't trigger AI response, just save the message
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      // If user not found error, try with default user_id
+      if (response.status === 404 && backendUserId !== "user_001") {
+        // Retry with default user_id
+        await fetch(backendUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: "user_001",
+            message: content,
+            message_id: messageId,
+            session_id: sessionId,
+            is_to_agent: false,
+          }),
+        });
+      } else {
+        console.warn(`Backend save failed for session ${sessionId}:`, errorData);
+      }
+    }
+  } catch (error) {
+    console.error(`Error saving message to backend for session ${sessionId}:`, error);
+    // Don't throw - allow message to be saved in memory even if backend save fails
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -18,12 +137,41 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const session = sessions.get(sessionId);
+  let session = sessions.get(sessionId);
+
+  // If session not in memory, try to load from backend database
   if (!session) {
-    return NextResponse.json(
-      { error: "Session not found" },
-      { status: 404 }
-    );
+    const backendMessages = await loadMessagesFromBackend(sessionId);
+
+    if (backendMessages.length > 0) {
+      // Create session from backend data
+      session = {
+        id: sessionId,
+        messages: backendMessages.sort((a, b) => a.timestamp - b.timestamp),
+        users: new Map<string, SessionUser>(),
+        createdAt: Date.now(),
+      };
+
+      // Extract users from messages
+      backendMessages.forEach((msg) => {
+        if (msg.userId && msg.userId !== "bot" && msg.userId !== "burpla") {
+          if (!session!.users.has(msg.userId)) {
+            session!.users.set(msg.userId, {
+              name: msg.userName || msg.userId,
+              joinedAt: msg.timestamp,
+            });
+          }
+        }
+      });
+
+      sessions.set(sessionId, session);
+    } else {
+      // No session found in backend either
+      return NextResponse.json(
+        { error: "Session not found" },
+        { status: 404 }
+      );
+    }
   }
 
   // Filter messages newer than lastMessageId
@@ -49,7 +197,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { action, sessionId, userId, userName, message, messageId } =
+    const { action, sessionId, userId, userName, message, messageId, cardConfig } =
       await req.json();
 
     if (action === "create") {
@@ -75,13 +223,39 @@ export async function POST(req: NextRequest) {
 
       let session = sessions.get(sessionId);
       if (!session) {
-        // Create session if it doesn't exist
-        session = {
-          id: sessionId,
-          messages: [],
-          users: new Map<string, SessionUser>(),
-          createdAt: Date.now(),
-        };
+        // Try to load from backend database first
+        const backendMessages = await loadMessagesFromBackend(sessionId);
+
+        if (backendMessages.length > 0) {
+          // Create session from backend data
+          session = {
+            id: sessionId,
+            messages: backendMessages.sort((a, b) => a.timestamp - b.timestamp),
+            users: new Map<string, SessionUser>(),
+            createdAt: Date.now(),
+          };
+
+          // Extract users from messages
+          backendMessages.forEach((msg) => {
+            if (msg.userId && msg.userId !== "bot" && msg.userId !== "burpla") {
+              if (!session!.users.has(msg.userId)) {
+                session!.users.set(msg.userId, {
+                  name: msg.userName || msg.userId,
+                  joinedAt: msg.timestamp,
+                });
+              }
+            }
+          });
+        } else {
+          // Create new session if it doesn't exist in backend either
+          session = {
+            id: sessionId,
+            messages: [],
+            users: new Map<string, SessionUser>(),
+            createdAt: Date.now(),
+          };
+        }
+
         sessions.set(sessionId, session);
       }
 
@@ -103,25 +277,53 @@ export async function POST(req: NextRequest) {
 
       let session = sessions.get(sessionId);
       if (!session) {
-        // Create session if it doesn't exist
-        session = {
-          id: sessionId,
-          messages: [],
-          users: new Map<string, SessionUser>(),
-          createdAt: Date.now(),
-        };
+        // Try to load from backend database first
+        const backendMessages = await loadMessagesFromBackend(sessionId);
+
+        if (backendMessages.length > 0) {
+          // Create session from backend data
+          session = {
+            id: sessionId,
+            messages: backendMessages.sort((a, b) => a.timestamp - b.timestamp),
+            users: new Map<string, SessionUser>(),
+            createdAt: Date.now(),
+          };
+
+          // Extract users from messages
+          backendMessages.forEach((msg) => {
+            if (msg.userId && msg.userId !== "bot" && msg.userId !== "burpla") {
+              if (!session!.users.has(msg.userId)) {
+                session!.users.set(msg.userId, {
+                  name: msg.userName || msg.userId,
+                  joinedAt: msg.timestamp,
+                });
+              }
+            }
+          });
+        } else {
+          // Create new session if it doesn't exist in backend either
+          session = {
+            id: sessionId,
+            messages: [],
+            users: new Map<string, SessionUser>(),
+            createdAt: Date.now(),
+          };
+        }
+
         sessions.set(sessionId, session);
       }
 
       const userData = session.users.get(userId);
-      const isBot = userId === "burpla" || userId === "ai";
+      const isBot = userId === "burpla" || userId === "ai" || userId === "bot";
+      const finalMessageId = messageId || generateId();
       const newMessage: SessionMessage = {
-        id: messageId || generateId(),
+        id: finalMessageId,
         userId,
         userName: isBot ? "Burpla" : (userData?.name || "Unknown"),
         content: message,
         role: isBot ? ("assistant" as const) : ("user" as const),
         timestamp: Date.now(),
+        ...(cardConfig && { cardConfig }), // Include cardConfig if provided
       };
 
       // Remove duplicate if exists (for AI streaming updates)
@@ -130,6 +332,11 @@ export async function POST(req: NextRequest) {
         session.messages[existingIndex] = newMessage;
       } else {
         session.messages.push(newMessage);
+      }
+
+      // Save user messages to backend database (bot messages are saved by backend /sent endpoint)
+      if (!isBot) {
+        await saveMessageToBackend(sessionId, userId, finalMessageId, message);
       }
 
       return NextResponse.json({ success: true, message: newMessage });

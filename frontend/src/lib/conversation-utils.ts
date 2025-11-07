@@ -1,5 +1,193 @@
 import type { InteractiveCardConfig } from "@/components/ai-elements/interactive-card";
 
+/**
+ * Parse a Python dict string to JavaScript object
+ */
+function parsePythonDict(str: string): any {
+  try {
+    // Replace Python None with null (before quote replacement)
+    let jsonStr = str.replace(/None/g, "null");
+
+    // Handle escaped double quotes in strings (like \"Pho X Trang's\")
+    // First, replace escaped double quotes with a temporary placeholder
+    jsonStr = jsonStr.replace(/\\"/g, "___ESCAPED_QUOTE___");
+
+    // Replace single quotes with double quotes
+    jsonStr = jsonStr.replace(/'/g, '"');
+
+    // Restore the escaped double quotes (now they're regular escaped quotes)
+    jsonStr = jsonStr.replace(/___ESCAPED_QUOTE___/g, '\\"');
+
+    // Try to parse
+    const parsed = JSON.parse(jsonStr);
+    return parsed;
+  } catch (error) {
+    console.error("Failed to parse Python dict:", error, str);
+    // If parsing fails, try a more permissive approach using Function constructor
+    // This handles Python dict syntax more accurately (note: input is from our own backend, so safe)
+    try {
+      let pythonStr = str
+        .replace(/None/g, "null")
+        .replace(/True/g, "true")
+        .replace(/False/g, "false");
+      const func = new Function("return " + pythonStr);
+      return func();
+    } catch (fallbackError) {
+      console.error("Fallback parsing also failed:", fallbackError);
+      return null;
+    }
+  }
+}
+
+/**
+ * Convert backend recommendation card format to InteractiveCardConfig
+ */
+function convertRecommendationCard(
+  data: any,
+  userLocation?: { lat: number; lng: number } | null
+): InteractiveCardConfig | undefined {
+  if (!data || data.type !== "recommendation_card" || !data.options) {
+    return undefined;
+  }
+
+  // If there's an error, don't show the card
+  if (data.error) {
+    console.warn("Recommendation card has error:", data.error);
+    return undefined;
+  }
+
+  const restaurants = data.options.map((opt: any) => {
+    // Convert price level string to number if possible
+    let priceLevel: number | undefined;
+    if (opt.priceLevel && opt.priceLevel !== "N/A") {
+      // Map price level strings to numbers
+      const priceLevelMap: Record<string, number> = {
+        PRICE_LEVEL_FREE: 0,
+        PRICE_LEVEL_INEXPENSIVE: 1,
+        PRICE_LEVEL_MODERATE: 2,
+        PRICE_LEVEL_EXPENSIVE: 3,
+        PRICE_LEVEL_VERY_EXPENSIVE: 4,
+      };
+      priceLevel = priceLevelMap[opt.priceLevel] ?? undefined;
+    }
+
+    // Convert rating string to number
+    const rating = opt.rating ? parseFloat(opt.rating) : undefined;
+
+    return {
+      id: opt.restaurant_id || undefined,
+      name: opt.restaurant_name,
+      address: opt.formattedAddress || opt.description,
+      formattedAddress: opt.formattedAddress || opt.description,
+      rating: rating,
+      userRatingCount: opt.userRatingCount,
+      priceLevel: priceLevel,
+      photoUri: opt.image || undefined,
+      googleMapsUri: opt.map,
+      hyperlink: opt.map,
+    };
+  });
+
+  return {
+    type: "restaurant_recommendation",
+    config: {
+      restaurants,
+      userLocation: userLocation
+        ? { lat: userLocation.lat, lng: userLocation.lng }
+        : undefined,
+      title: "Restaurant Recommendations",
+    },
+  };
+}
+
+/**
+ * Convert backend voting card format to InteractiveCardConfig
+ */
+function convertVotingCard(data: any): InteractiveCardConfig | undefined {
+  if (!data || data.type !== "vote_card" || !data.vote_options) {
+    return undefined;
+  }
+
+  // Convert vote options to the format expected by VotingCardConfig
+  const options = data.vote_options.map((opt: any) => {
+    // Convert rating string to number
+    const rating = opt.rating ? parseFloat(opt.rating) : undefined;
+
+    return {
+      id: opt.restaurant_id || undefined,
+      restaurant_id: opt.restaurant_id || undefined,
+      name: opt.restaurant_name,
+      restaurant_name: opt.restaurant_name,
+      description: opt.description,
+      image: opt.image || undefined,
+      photoUri: opt.image || undefined,
+      votes: opt.number_of_vote || 0,
+      number_of_vote: opt.number_of_vote || 0,
+      map: opt.map,
+      googleMapsUri: opt.map,
+      hyperlink: opt.map,
+      rating: rating,
+      userRatingCount: opt.userRatingCount,
+    };
+  });
+
+  // Calculate total votes
+  const totalVotes = options.reduce((sum: number, opt: any) => {
+    return sum + (opt.votes || opt.number_of_vote || 0);
+  }, 0);
+
+  return {
+    type: "voting",
+    config: {
+      question: "Vote for your favorite restaurant:",
+      options,
+      totalVotes,
+      allowVoting: false, // Set to true if you want to enable voting functionality
+    },
+  };
+}
+
+/**
+ * Parse message content to extract card information
+ * Returns both the cleaned message content and cardConfig if a card is found
+ */
+export function parseMessageForCard(
+  messageContent: string,
+  userLocation?: { lat: number; lng: number } | null
+): { content: string; cardConfig?: InteractiveCardConfig } {
+  let content = messageContent || "";
+  let cardConfig: InteractiveCardConfig | undefined = undefined;
+
+  // Try to parse the message as a Python dict string
+  // Check if message looks like a Python dict (starts with { and contains 'type')
+  if (
+    content.trim().startsWith("{") &&
+    (content.includes("'type'") || content.includes('"type"'))
+  ) {
+    const parsedData = parsePythonDict(content);
+    if (parsedData) {
+      // Check for recommendation card
+      if (parsedData.type === "recommendation_card") {
+        cardConfig = convertRecommendationCard(parsedData, userLocation);
+        if (cardConfig) {
+          // Set a user-friendly message content when we have a card
+          content = "Here are some restaurant recommendations:";
+        }
+      }
+      // Check for voting card
+      else if (parsedData.type === "vote_card") {
+        cardConfig = convertVotingCard(parsedData);
+        if (cardConfig) {
+          // Set a user-friendly message content when we have a voting card
+          content = "Vote for your favorite restaurant:";
+        }
+      }
+    }
+  }
+
+  return { content, cardConfig };
+}
+
 // Types for convo_sample.json format
 export interface ConvoMessage {
   message_id: string;

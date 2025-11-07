@@ -3,6 +3,8 @@
  * This allows /api/sent to access conversation context directly
  */
 
+import type { InteractiveCardConfig } from "@/components/ai-elements/interactive-card";
+
 export interface SessionMessage {
   id: string;
   userId: string;
@@ -10,6 +12,7 @@ export interface SessionMessage {
   content: string;
   role: "user" | "assistant";
   timestamp: number;
+  cardConfig?: InteractiveCardConfig;
 }
 
 export interface SessionUser {
