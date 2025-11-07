@@ -596,7 +596,7 @@ export function GroupChat({
                   action: "send",
                   sessionId,
                   userId: "burpla",
-                  message: sentData.message,
+                  message: messageContent, // Use processed messageContent instead of raw sentData.message
                   messageId: sentData.id || messageId,
                 }),
               });
