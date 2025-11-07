@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 
@@ -8,7 +8,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
  * Custom error page for NextAuth authentication errors
  * This page displays user-friendly error messages and provides a way to go back
  */
-export default function AuthErrorPage() {
+function AuthErrorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +94,18 @@ export default function AuthErrorPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#202225]">
+        <div className="text-[#b9bbbe]">Loading...</div>
+      </div>
+    }>
+      <AuthErrorContent />
+    </Suspense>
   );
 }
 

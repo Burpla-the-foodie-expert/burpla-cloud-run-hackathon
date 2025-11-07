@@ -58,9 +58,9 @@ function parsePythonDict(str: string): any {
           return result;
         } catch (finalError) {
           console.error("Failed to parse Python dict with all methods:", {
-            jsonError: jsonError.message,
-            funcError: funcError.message,
-            finalError: finalError.message,
+            jsonError: jsonError instanceof Error ? jsonError.message : String(jsonError),
+            funcError: funcError instanceof Error ? funcError.message : String(funcError),
+            finalError: finalError instanceof Error ? finalError.message : String(finalError),
             sample: str.substring(0, 500),
             normalized: normalized.substring(0, 500),
           });
@@ -241,6 +241,8 @@ export interface ConvoMessage {
       review?: string;
       number_of_vote?: number;
       map?: string;
+      vote_user_id_list?: string[];
+      [key: string]: any; // Allow additional properties
     }>;
     selected_restaurant_name?: string;
     time_selection?: string;
