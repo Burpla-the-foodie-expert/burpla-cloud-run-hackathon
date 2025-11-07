@@ -45,13 +45,20 @@ export function SessionManager({
 
   const createSession = async () => {
     const id = `${Math.random().toString(36).substring(2, 9)}-${Math.random().toString(36).substring(2, 9)}`;
+    const userId = localStorage.getItem("userId") || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem("userId", userId);
 
     // Create session on backend
     try {
       await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", sessionId: id }),
+        body: JSON.stringify({
+          action: "create",
+          sessionId: id,
+          userId: userId,
+          userName: userName,
+        }),
       });
     } catch (error) {
       console.error("Failed to create session:", error);

@@ -88,14 +88,56 @@ export function Sidebar({ userName, currentSessionId, onSessionChange, onUserUpd
   }, [])
 
   const handleSessionClick = (sessionId: string) => {
+    // Update localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentSessionId', sessionId)
+
+      // Update URL
+      const url = new URL(window.location.href)
+      url.searchParams.set('session', sessionId)
+      window.history.replaceState({}, '', url.toString())
+    }
+
+    // Notify parent component
     if (onSessionChange) {
       onSessionChange(sessionId)
     }
   }
 
-  const handleCreateSession = () => {
+  const handleCreateSession = async () => {
     // Generate a new session ID
     const newSessionId = `${Math.random().toString(36).substring(2, 9)}-${Math.random().toString(36).substring(2, 9)}`
+    const userId = localStorage.getItem('userId') || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    localStorage.setItem('userId', userId)
+    const userName = localStorage.getItem('userName') || 'User'
+
+    // Create session on backend
+    try {
+      await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          sessionId: newSessionId,
+          userId: userId,
+          userName: userName,
+        }),
+      })
+    } catch (error) {
+      console.error('Failed to create session:', error)
+    }
+
+    // Update localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentSessionId', newSessionId)
+
+      // Update URL
+      const url = new URL(window.location.href)
+      url.searchParams.set('session', newSessionId)
+      window.history.replaceState({}, '', url.toString())
+    }
+
+    // Notify parent component
     if (onSessionChange) {
       onSessionChange(newSessionId)
     }

@@ -24,9 +24,12 @@ interface MessageGroup {
 interface BotMessageProps {
   group: MessageGroup;
   groupIndex: number;
+  sessionId?: string | null;
+  userId?: string | null;
+  onVoteUpdate?: () => void;
 }
 
-export function BotMessage({ group, groupIndex }: BotMessageProps) {
+export function BotMessage({ group, groupIndex, sessionId, userId, onVoteUpdate }: BotMessageProps) {
   return (
     <div
       key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
@@ -72,7 +75,13 @@ export function BotMessage({ group, groupIndex }: BotMessageProps) {
                   </div>
                 )}
                 {message.cardConfig && (
-                  <InteractiveCard cardConfig={message.cardConfig} />
+                  <InteractiveCard
+                    cardConfig={message.cardConfig}
+                    sessionId={sessionId}
+                    userId={userId}
+                    messageId={message.id}
+                    onVoteUpdate={onVoteUpdate}
+                  />
                 )}
               </div>
             );

@@ -3,40 +3,74 @@ import { getApiUrl } from "@/lib/api-config";
 
 /**
  * Parse a Python dict string to JavaScript object
+ * Handles Python dict syntax including None, True, False, and mixed quotes
  */
 function parsePythonDict(str: string): any {
   try {
-    // Replace Python None with null (before quote replacement)
-    let jsonStr = str.replace(/None/g, "null");
+    // Step 1: Normalize Python boolean/null values to JavaScript
+    let normalized = str
+      .replace(/None/g, "null")
+      .replace(/True/g, "true")
+      .replace(/False/g, "false");
 
-    // Handle escaped double quotes in strings (like \"Pho X Trang's\")
-    // First, replace escaped double quotes with a temporary placeholder
-    jsonStr = jsonStr.replace(/\\"/g, "___ESCAPED_QUOTE___");
+    // Step 2: Use a smarter approach - protect double-quoted strings first
+    // Python uses double quotes for strings containing apostrophes (like "BJ's")
+    // We need to protect these before converting single quotes
+    const protectedStrings: Array<{ placeholder: string; original: string }> = [];
+    let placeholderIndex = 0;
 
-    // Replace single quotes with double quotes
-    jsonStr = jsonStr.replace(/'/g, '"');
+    // Extract and replace double-quoted strings (handling escaped quotes)
+    normalized = normalized.replace(/"((?:[^"\\]|\\.)*)"/g, (match, content) => {
+      const placeholder = `___PROTECTED_STR_${placeholderIndex++}___`;
+      protectedStrings.push({ placeholder, original: match });
+      return placeholder;
+    });
 
-    // Restore the escaped double quotes (now they're regular escaped quotes)
-    jsonStr = jsonStr.replace(/___ESCAPED_QUOTE___/g, '\\"');
+    // Step 3: Now replace single quotes with double quotes (safe since double-quoted strings are protected)
+    normalized = normalized.replace(/'/g, '"');
 
-    // Try to parse
-    const parsed = JSON.parse(jsonStr);
-    return parsed;
-  } catch (error) {
-    console.error("Failed to parse Python dict:", error, str);
-    // If parsing fails, try a more permissive approach using Function constructor
-    // This handles Python dict syntax more accurately (note: input is from our own backend, so safe)
+    // Step 4: Restore the protected double-quoted strings
+    protectedStrings.forEach(({ placeholder, original }) => {
+      normalized = normalized.replace(placeholder, original);
+    });
+
+    // Step 6: Try JSON parsing first (most reliable and safe)
     try {
-      let pythonStr = str
-        .replace(/None/g, "null")
-        .replace(/True/g, "true")
-        .replace(/False/g, "false");
-      const func = new Function("return " + pythonStr);
-      return func();
-    } catch (fallbackError) {
-      console.error("Fallback parsing also failed:", fallbackError);
-      return null;
+      const parsed = JSON.parse(normalized);
+      return parsed;
+    } catch (jsonError) {
+      // Step 7: If JSON parsing fails, try Function constructor as fallback
+      // Note: Input is from our own backend, so this is safe
+      try {
+        const func = new Function("return " + normalized);
+        const result = func();
+        return result;
+      } catch (funcError) {
+        // Last resort: try with original Python syntax using Function constructor
+        // (JavaScript can sometimes handle Python-like syntax)
+        try {
+          const originalNormalized = str
+            .replace(/None/g, "null")
+            .replace(/True/g, "true")
+            .replace(/False/g, "false");
+          const func2 = new Function("return " + originalNormalized);
+          const result = func2();
+          return result;
+        } catch (finalError) {
+          console.error("Failed to parse Python dict with all methods:", {
+            jsonError: jsonError.message,
+            funcError: funcError.message,
+            finalError: finalError.message,
+            sample: str.substring(0, 500),
+            normalized: normalized.substring(0, 500),
+          });
+          return null;
+        }
+      }
     }
+  } catch (error) {
+    console.error("Failed to parse Python dict:", error, str.substring(0, 200));
+    return null;
   }
 }
 
@@ -129,6 +163,7 @@ function convertVotingCard(data: any): InteractiveCardConfig | undefined {
       hyperlink: opt.map,
       rating: rating,
       userRatingCount: opt.userRatingCount,
+      vote_user_id_list: opt.vote_user_id_list || [], // Include vote_user_id_list to track who voted
     };
   });
 
@@ -143,7 +178,7 @@ function convertVotingCard(data: any): InteractiveCardConfig | undefined {
       question: "Vote for your favorite restaurant:",
       options,
       totalVotes,
-      allowVoting: false, // Set to true if you want to enable voting functionality
+      allowVoting: true, // Enable voting functionality with backend integration
     },
   };
 }
@@ -265,6 +300,7 @@ export function convertConvoMessageToGroupChatMessage(
 
       const voteOptions = (convoMsg.content.vote_options || []).map((opt, idx) => ({
         id: opt.restaurant_id || `option-${idx}`,
+        restaurant_id: opt.restaurant_id || `option-${idx}`,
         restaurant_name: opt.restaurant_name || `Option ${idx + 1}`,
         name: opt.restaurant_name || `Option ${idx + 1}`,
         description: opt.description || "",
@@ -276,6 +312,7 @@ export function convertConvoMessageToGroupChatMessage(
         map: opt.map || "",
         hyperlink: opt.map || "",
         googleMapsUri: opt.map || "",
+        vote_user_id_list: opt.vote_user_id_list || [], // Include vote_user_id_list to track who voted
       }));
 
       const totalVotes = voteOptions.reduce((sum, opt) => sum + (opt.number_of_vote || 0), 0);
@@ -286,7 +323,7 @@ export function convertConvoMessageToGroupChatMessage(
           question: convoMsg.content.title || "Vote for your favorite option:",
           options: voteOptions,
           totalVotes,
-          allowVoting: false, // Set to true if you want to enable voting
+          allowVoting: true, // Enable voting functionality with backend integration
         },
       };
       break;

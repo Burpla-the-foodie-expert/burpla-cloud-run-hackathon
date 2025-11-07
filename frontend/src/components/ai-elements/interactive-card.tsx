@@ -9,8 +9,19 @@ import {
   Calendar,
   Info,
   Utensils,
+  Check,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { useState, useEffect, useRef } from "react";
+import { getApiUrl } from "@/lib/api-config";
+
+// Google Maps types
+declare global {
+  interface Window {
+    google: any;
+    initMap: () => void;
+  }
+}
 
 // Restaurant Recommendation Card Types
 interface RestaurantLocation {
@@ -66,6 +77,7 @@ interface VoteOption {
   location?: string;
   rating?: number;
   userRatingCount?: number;
+  vote_user_id_list?: string[]; // List of user IDs who voted for this option
 }
 
 interface VotingCardConfig {
@@ -107,6 +119,10 @@ export type InteractiveCardConfig =
 interface InteractiveCardProps {
   cardConfig: InteractiveCardConfig;
   className?: string;
+  sessionId?: string | null;
+  userId?: string | null;
+  messageId?: string | null;
+  onVoteUpdate?: () => void; // Callback to refresh messages after voting
 }
 
 // Helper function to calculate distance between two coordinates (Haversine formula)
@@ -143,6 +159,383 @@ function getPriceSymbol(level?: number): string {
   return "$".repeat(Math.min(level, 4));
 }
 
+// Google Maps component for displaying restaurant locations
+function RestaurantMap({
+  restaurants,
+  userLocation,
+}: {
+  restaurants: Restaurant[];
+  userLocation?: RestaurantLocation;
+}) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Get Google Maps API key from environment
+  const apiKey =
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+    process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+
+  // Load Google Maps script
+  useEffect(() => {
+    console.log("[RestaurantMap] Checking API key:", {
+      hasKey: !!apiKey,
+      keyPrefix: apiKey ? apiKey.substring(0, 10) + "..." : "none",
+      envVars: {
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:
+          !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+        NEXT_PUBLIC_GOOGLE_API_KEY: !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
+      },
+    });
+
+    if (!apiKey) {
+      setMapError(
+        "Google Maps API key not found. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY or NEXT_PUBLIC_GOOGLE_API_KEY"
+      );
+      setIsLoading(false);
+      return;
+    }
+
+    if (mapLoaded) return;
+
+    // Check if script is already loaded
+    if (window.google && window.google.maps) {
+      setMapLoaded(true);
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if script is already being loaded
+    const existingScript = document.querySelector(
+      `script[src*="maps.googleapis.com"]`
+    );
+    if (existingScript) {
+      // Script is loading, wait for it
+      const checkInterval = setInterval(() => {
+        if (window.google && window.google.maps) {
+          setMapLoaded(true);
+          setIsLoading(false);
+          clearInterval(checkInterval);
+        }
+      }, 100);
+      return () => clearInterval(checkInterval);
+    }
+
+    // Create script element
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google && window.google.maps) {
+        setMapLoaded(true);
+        setIsLoading(false);
+      } else {
+        setMapError("Google Maps failed to load");
+        setIsLoading(false);
+      }
+    };
+    script.onerror = () => {
+      setMapError(
+        "Failed to load Google Maps script. Please check your API key."
+      );
+      setIsLoading(false);
+    };
+    document.head.appendChild(script);
+  }, [apiKey, mapLoaded]);
+
+  // Initialize map and markers
+  useEffect(() => {
+    if (
+      !mapLoaded ||
+      !mapRef.current ||
+      !window.google ||
+      !window.google.maps
+    ) {
+      return;
+    }
+
+    // Geocode restaurants that don't have coordinates
+    const geocodeRestaurants = async () => {
+      const geocoder = new window.google.maps.Geocoder();
+      const restaurantsWithCoords: Array<
+        Restaurant & { lat: number; lng: number }
+      > = [];
+
+      for (const restaurant of restaurants) {
+        // If restaurant already has coordinates, use them
+        if (
+          restaurant.location_coordinates?.latitude &&
+          restaurant.location_coordinates?.longitude
+        ) {
+          restaurantsWithCoords.push({
+            ...restaurant,
+            lat: restaurant.location_coordinates.latitude,
+            lng: restaurant.location_coordinates.longitude,
+          });
+          continue;
+        }
+
+        // Otherwise, geocode the address
+        const address =
+          restaurant.formattedAddress ||
+          restaurant.address ||
+          restaurant.location;
+        if (!address) {
+          console.warn(
+            `[RestaurantMap] No address for restaurant: ${restaurant.name}`
+          );
+          continue;
+        }
+
+        try {
+          const results = await new Promise<any>((resolve, reject) => {
+            geocoder.geocode({ address }, (results: any, status: any) => {
+              if (status === "OK" && results && results[0]) {
+                resolve(results[0]);
+              } else {
+                reject(new Error(`Geocoding failed: ${status}`));
+              }
+            });
+          });
+
+          const location = results.geometry.location;
+          restaurantsWithCoords.push({
+            ...restaurant,
+            lat: location.lat(),
+            lng: location.lng(),
+          });
+        } catch (error) {
+          console.warn(
+            `[RestaurantMap] Failed to geocode ${restaurant.name}:`,
+            error
+          );
+        }
+      }
+
+      return restaurantsWithCoords;
+    };
+
+    // Initialize map and geocode restaurants
+    const initializeMap = async () => {
+      try {
+        // Get restaurants with coordinates (either existing or geocoded)
+        const restaurantsWithCoords = await geocodeRestaurants();
+
+        if (restaurantsWithCoords.length === 0) {
+          console.log("[RestaurantMap] No restaurants with coordinates:", {
+            total: restaurants.length,
+            restaurants: restaurants.map((r) => ({
+              name: r.name,
+              hasCoords: !!(
+                r.location_coordinates?.latitude &&
+                r.location_coordinates?.longitude
+              ),
+              hasAddress: !!(r.formattedAddress || r.address || r.location),
+              coords: r.location_coordinates,
+            })),
+          });
+          setMapError("No restaurants with valid addresses found");
+          setIsLoading(false);
+          return;
+        }
+
+        console.log(
+          "[RestaurantMap] Initializing map with",
+          restaurantsWithCoords.length,
+          "restaurants"
+        );
+
+        // Initialize map
+        const map = new window.google.maps.Map(mapRef.current, {
+          zoom: 13,
+          center: {
+            lat: restaurantsWithCoords[0].lat,
+            lng: restaurantsWithCoords[0].lng,
+          },
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+        });
+
+        // Create bounds to fit all markers
+        const bounds = new window.google.maps.LatLngBounds();
+        const infoWindow = new window.google.maps.InfoWindow();
+        const newMarkers: any[] = [];
+        let userMarker: any = null;
+
+        // Add markers for each restaurant
+        restaurantsWithCoords.forEach((restaurant) => {
+          const position = { lat: restaurant.lat, lng: restaurant.lng };
+
+          const restaurantName =
+            restaurant.name ||
+            (typeof restaurant.displayName === "string"
+              ? restaurant.displayName
+              : restaurant.displayName?.text) ||
+            "Restaurant";
+
+          const restaurantAddress =
+            restaurant.address ||
+            restaurant.formattedAddress ||
+            restaurant.location ||
+            "Address not available";
+
+          const mapUri =
+            restaurant.mapUri ||
+            restaurant.googleMapsUri ||
+            restaurant.hyperlink;
+
+          // Create marker
+          const marker = new window.google.maps.Marker({
+            position,
+            map,
+            title: restaurantName,
+            icon: {
+              url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+            },
+          });
+
+          bounds.extend(position);
+          newMarkers.push(marker);
+
+          // Add click listener to show info window
+          marker.addListener("click", () => {
+            const content = `
+          <div style="font-family: Arial, sans-serif; padding: 8px; min-width: 200px;">
+            <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #333;">
+              ${restaurantName}
+            </div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+              ${restaurantAddress}
+            </div>
+            ${
+              restaurant.rating !== undefined
+                ? `<div style="font-size: 12px; color: #666; margin-bottom: 4px;">
+                    ⭐ ${restaurant.rating.toFixed(1)} ${
+                    restaurant.userRatingCount
+                      ? `(${restaurant.userRatingCount.toLocaleString()})`
+                      : ""
+                  }
+                  </div>`
+                : ""
+            }
+            ${
+              mapUri
+                ? `<a href="${mapUri}" target="_blank" style="font-size: 12px; color: #1976d2; text-decoration: none;">
+                    Open in Google Maps →
+                  </a>`
+                : ""
+            }
+          </div>
+        `;
+            infoWindow.setContent(content);
+            infoWindow.open(map, marker);
+          });
+        });
+
+        // Add user location marker if available
+        if (userLocation) {
+          userMarker = new window.google.maps.Marker({
+            position: { lat: userLocation.lat, lng: userLocation.lng },
+            map,
+            title: "Your Location",
+            icon: {
+              url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+            },
+          });
+          bounds.extend({ lat: userLocation.lat, lng: userLocation.lng });
+        }
+
+        // Fit map to show all markers
+        if (restaurantsWithCoords.length > 1 || userLocation) {
+          map.fitBounds(bounds);
+          // Prevent zooming in too far
+          window.google.maps.event.addListenerOnce(
+            map,
+            "bounds_changed",
+            () => {
+              if (map.getZoom()! > 17) {
+                map.setZoom(17);
+              }
+            }
+          );
+        } else if (restaurantsWithCoords.length === 1) {
+          // Center on single restaurant
+          map.setCenter(bounds.getCenter());
+          map.setZoom(15);
+        }
+
+        // Cleanup function
+        return () => {
+          // Remove all markers
+          newMarkers.forEach((marker) => {
+            marker.setMap(null);
+          });
+          if (userMarker) {
+            userMarker.setMap(null);
+          }
+        };
+      } catch (error: any) {
+        console.error("Error initializing Google Map:", error);
+        setMapError(error.message || "Failed to initialize map");
+        setIsLoading(false);
+      }
+    };
+
+    initializeMap();
+  }, [mapLoaded, restaurants, userLocation]);
+
+  // Show error state
+  if (mapError) {
+    return (
+      <div className="h-80 bg-[#1e1f22] flex items-center justify-center text-[#72767d] text-sm p-4 text-center border border-[#40444b] rounded-lg">
+        <div>
+          <div className="mb-2">⚠️ {mapError}</div>
+          {apiKey && (
+            <div className="text-xs text-[#5a5d63] mt-2">
+              API Key: {apiKey.substring(0, 10)}...
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isLoading || !mapLoaded) {
+    return (
+      <div className="h-80 bg-[#1e1f22] flex items-center justify-center text-[#72767d] text-sm border border-[#40444b] rounded-lg">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-[#5865f2] border-t-transparent rounded-full animate-spin" />
+          Loading map...
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if no API key
+  if (!apiKey) {
+    return (
+      <div className="h-80 bg-[#1e1f22] flex items-center justify-center text-[#72767d] text-sm border border-[#40444b] rounded-lg">
+        <div className="text-center">
+          <div className="mb-2">Google Maps API key not configured</div>
+          <div className="text-xs text-[#5a5d63]">
+            Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env.local file
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-80 bg-[#1e1f22] rounded-lg overflow-hidden border border-[#40444b]">
+      <div ref={mapRef} className="w-full h-full" />
+    </div>
+  );
+}
+
 // Restaurant Recommendation Card Component
 function RestaurantRecommendationCard({
   config,
@@ -159,7 +552,10 @@ function RestaurantRecommendationCard({
     let restLat: number | undefined;
     let restLng: number | undefined;
 
-    if (restaurant.location_coordinates?.latitude && restaurant.location_coordinates?.longitude) {
+    if (
+      restaurant.location_coordinates?.latitude &&
+      restaurant.location_coordinates?.longitude
+    ) {
       restLat = restaurant.location_coordinates.latitude;
       restLng = restaurant.location_coordinates.longitude;
     } else if (userLocation && !distance) {
@@ -194,6 +590,13 @@ function RestaurantRecommendationCard({
     return 0;
   });
 
+  // Check if restaurants have addresses (for geocoding) or coordinates
+  const restaurantsWithLocation = sortedRestaurants.filter((r) =>
+    r.location_coordinates?.latitude && r.location_coordinates?.longitude
+      ? true
+      : !!(r.formattedAddress || r.address || r.location)
+  );
+
   return (
     <div className="bg-[#2f3136] border border-[#40444b] rounded-lg overflow-hidden">
       <div className="p-4 border-b border-[#40444b]">
@@ -208,6 +611,16 @@ function RestaurantRecommendationCard({
           {sortedRestaurants.length !== 1 ? "s" : ""} found
         </p>
       </div>
+
+      {/* Google Map with pinned restaurants */}
+      {restaurantsWithLocation.length > 0 && (
+        <div className="p-4 border-b border-[#40444b]">
+          <RestaurantMap
+            restaurants={sortedRestaurants}
+            userLocation={userLocation}
+          />
+        </div>
+      )}
 
       <div className="divide-y divide-[#40444b]">
         {sortedRestaurants.map((restaurant, index) => {
@@ -309,22 +722,205 @@ function RestaurantRecommendationCard({
 // Voting Card Component
 function VotingCard({
   config,
+  sessionId,
+  userId,
+  messageId,
+  onVoteUpdate,
 }: {
   config: VotingCardConfig;
+  sessionId?: string | null;
+  userId?: string | null;
+  messageId?: string | null;
+  onVoteUpdate?: () => void;
 }) {
   const { question, options, totalVotes, allowVoting = false, onVote } = config;
 
+  // Initialize votedOptionId from options if user has already voted
+  const getInitialVotedOptionId = (): string | null => {
+    if (!userId || !options.length) return null;
+    for (const opt of options) {
+      const voteList = (opt as any).vote_user_id_list;
+      if (Array.isArray(voteList) && voteList.includes(userId)) {
+        return opt.id || opt.restaurant_id || null;
+      }
+    }
+    return null;
+  };
+
+  const [votedOptionId, setVotedOptionId] = useState<string | null>(
+    getInitialVotedOptionId()
+  );
+  const [isVoting, setIsVoting] = useState(false);
+  const [localOptions, setLocalOptions] = useState(options);
+
+  // Update local options when config changes
+  useEffect(() => {
+    setLocalOptions(options);
+  }, [options]);
+
+  // Check if user has already voted (from vote_user_id_list if available)
+  // This updates when options or userId changes
+  useEffect(() => {
+    if (userId && localOptions.length > 0) {
+      let foundOptionId: string | null = null;
+
+      // Check each option for vote_user_id_list
+      for (const opt of localOptions) {
+        const voteList = (opt as any).vote_user_id_list;
+        if (Array.isArray(voteList) && voteList.includes(userId)) {
+          foundOptionId = opt.id || opt.restaurant_id || null;
+          break;
+        }
+      }
+
+      // Update votedOptionId using functional update to avoid stale closure
+      setVotedOptionId((current) => {
+        // Only update if the value actually changed
+        if (foundOptionId !== current) {
+          return foundOptionId;
+        }
+        return current;
+      });
+    } else if (!userId) {
+      // Reset if userId is not available
+      setVotedOptionId(null);
+    }
+  }, [userId, localOptions]);
+
+  // Handle vote button click
+  const handleVote = async (optionId: string) => {
+    if (!sessionId || !userId || !messageId || isVoting) {
+      return;
+    }
+
+    // Check if already voted for this option (toggle vote)
+    // If clicking the same option, unvote (is_vote_up = false)
+    // If clicking a different option, vote for it (is_vote_up = true)
+    const isVotingUp = votedOptionId !== optionId;
+    const previousVotedOptionId = votedOptionId;
+
+    setIsVoting(true);
+
+    try {
+      // Call backend vote endpoint
+      const voteUrl = getApiUrl(
+        `/vote?session_id=${encodeURIComponent(
+          sessionId
+        )}&user_id=${encodeURIComponent(
+          userId
+        )}&message_id=${encodeURIComponent(
+          messageId
+        )}&vote_option_id=${encodeURIComponent(
+          optionId
+        )}&is_vote_up=${isVotingUp}`
+      );
+
+      const response = await fetch(voteUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.ok) {
+        // Update local state optimistically
+        setLocalOptions((prev) =>
+          prev.map((opt) => {
+            const optId = opt.id || opt.restaurant_id;
+
+            // Update the option being voted on
+            if (optId === optionId) {
+              const currentVotes = opt.votes || opt.number_of_vote || 0;
+              const newVotes = isVotingUp
+                ? currentVotes + 1
+                : Math.max(0, currentVotes - 1);
+
+              // Update vote_user_id_list
+              const voteList = (opt as any).vote_user_id_list || [];
+              let newVoteList = [...voteList];
+
+              if (isVotingUp) {
+                // Add user to vote list if not already there
+                if (!newVoteList.includes(userId!)) {
+                  newVoteList.push(userId!);
+                }
+              } else {
+                // Remove user from vote list
+                newVoteList = newVoteList.filter((id: string) => id !== userId);
+              }
+
+              return {
+                ...opt,
+                votes: newVotes,
+                number_of_vote: newVotes,
+                vote_user_id_list: newVoteList,
+              };
+            }
+
+            // If switching votes, remove vote from previous option
+            if (
+              previousVotedOptionId &&
+              optId === previousVotedOptionId &&
+              isVotingUp
+            ) {
+              const currentVotes = opt.votes || opt.number_of_vote || 0;
+              const voteList = (opt as any).vote_user_id_list || [];
+              const newVoteList = voteList.filter(
+                (id: string) => id !== userId
+              );
+
+              return {
+                ...opt,
+                votes: Math.max(0, currentVotes - 1),
+                number_of_vote: Math.max(0, currentVotes - 1),
+                vote_user_id_list: newVoteList,
+              };
+            }
+
+            return opt;
+          })
+        );
+
+        setVotedOptionId(isVotingUp ? optionId : null);
+
+        // Call custom onVote handler if provided
+        if (onVote) {
+          onVote(optionId);
+        }
+
+        // Refresh messages to get updated vote counts from backend
+        if (onVoteUpdate) {
+          setTimeout(() => {
+            onVoteUpdate();
+          }, 500);
+        }
+      } else {
+        console.error("Failed to vote:", await response.text());
+      }
+    } catch (error) {
+      console.error("Error voting:", error);
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
   // Normalize vote counts (handle both votes and number_of_vote fields)
-  const normalizedOptions = options.map((opt) => ({
+  const normalizedOptions = localOptions.map((opt) => ({
     ...opt,
     voteCount: opt.votes || opt.number_of_vote || 0,
   }));
+
+  // Recalculate total votes from local options
+  const currentTotalVotes = normalizedOptions.reduce(
+    (sum, opt) => sum + opt.voteCount,
+    0
+  );
 
   // Calculate percentages
   const optionsWithPercentages = normalizedOptions.map((opt) => ({
     ...opt,
     percentage:
-      totalVotes > 0 ? Math.round((opt.voteCount / totalVotes) * 100) : 0,
+      currentTotalVotes > 0
+        ? Math.round((opt.voteCount / currentTotalVotes) * 100)
+        : 0,
   }));
 
   // Sort by votes (highest first)
@@ -340,9 +936,13 @@ function VotingCard({
           <h3 className="text-base font-semibold text-white">{question}</h3>
         </div>
         <div className="flex items-center gap-2 text-sm text-[#72767d]">
-          <span>{totalVotes} vote{totalVotes !== 1 ? "s" : ""}</span>
+          <span>
+            {currentTotalVotes} vote{currentTotalVotes !== 1 ? "s" : ""}
+          </span>
           <span>•</span>
-          <span>{options.length} option{options.length !== 1 ? "s" : ""}</span>
+          <span>
+            {options.length} option{options.length !== 1 ? "s" : ""}
+          </span>
         </div>
       </div>
 
@@ -357,8 +957,7 @@ function VotingCard({
           const imageUri = option.image || option.photoUri;
 
           // Normalize map/link URI
-          const mapUri =
-            option.map || option.hyperlink || option.googleMapsUri;
+          const mapUri = option.map || option.hyperlink || option.googleMapsUri;
 
           return (
             <div
@@ -437,12 +1036,32 @@ function VotingCard({
                     </span>
                     <span className="text-[#72767d]">({percentage}%)</span>
                   </div>
-                  {allowVoting && onVote && (
+                  {allowVoting && sessionId && userId && messageId && (
                     <button
-                      onClick={() => onVote(option.id || "")}
-                      className="px-3 py-1 bg-[#5865f2] hover:bg-[#4752c4] text-white text-sm rounded transition-colors"
+                      onClick={() =>
+                        handleVote(option.id || option.restaurant_id || "")
+                      }
+                      disabled={isVoting}
+                      className={`px-3 py-1 text-white text-sm rounded transition-colors flex items-center gap-1.5 ${
+                        votedOptionId === (option.id || option.restaurant_id)
+                          ? "bg-[#57f287] hover:bg-[#4ae077]"
+                          : "bg-[#5865f2] hover:bg-[#4752c4]"
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
-                      Vote
+                      {isVoting ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Voting...
+                        </>
+                      ) : votedOptionId ===
+                        (option.id || option.restaurant_id) ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          Voted
+                        </>
+                      ) : (
+                        "Vote"
+                      )}
                     </button>
                   )}
                 </div>
@@ -462,11 +1081,7 @@ function VotingCard({
 }
 
 // Reminder Card Component
-function ReminderCard({
-  config,
-}: {
-  config: ReminderCardConfig;
-}) {
+function ReminderCard({ config }: { config: ReminderCardConfig }) {
   const { title, description, location, time, priority = "medium" } = config;
 
   const reminderTime = typeof time === "string" ? new Date(time) : time;
@@ -538,6 +1153,10 @@ function ReminderCard({
 export function InteractiveCard({
   cardConfig,
   className = "",
+  sessionId,
+  userId,
+  messageId,
+  onVoteUpdate,
 }: InteractiveCardProps) {
   return (
     <div className={`my-2 ${className}`}>
@@ -545,7 +1164,13 @@ export function InteractiveCard({
         <RestaurantRecommendationCard config={cardConfig.config} />
       )}
       {cardConfig.type === "voting" && (
-        <VotingCard config={cardConfig.config} />
+        <VotingCard
+          config={cardConfig.config}
+          sessionId={sessionId}
+          userId={userId}
+          messageId={messageId}
+          onVoteUpdate={onVoteUpdate}
+        />
       )}
       {cardConfig.type === "reminder" && (
         <ReminderCard config={cardConfig.config} />
@@ -553,4 +1178,3 @@ export function InteractiveCard({
     </div>
   );
 }
-

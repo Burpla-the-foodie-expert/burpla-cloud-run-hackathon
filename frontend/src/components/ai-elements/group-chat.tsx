@@ -16,6 +16,7 @@ import {
 import {
   subscribeToMessages,
   refreshMessages,
+  clearCache,
   type CachedMessage,
 } from "@/lib/message-cache";
 import { getApiUrl } from "@/lib/api-config";
@@ -125,7 +126,18 @@ export function GroupChat({
 
   // Subscribe to cached messages (shared across components)
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      // Clear messages when sessionId is null
+      setMessages([]);
+      setSessionUsers([]);
+      return;
+    }
+
+    // Clear messages and cache when switching sessions to prevent showing old messages
+    setMessages([]);
+    setSessionUsers([]);
+    // Clear the cache for the previous session (if any) to ensure fresh data
+    // The cache will be recreated when we subscribe below
 
     const handleMessagesUpdate = (cachedMessages: CachedMessage[]) => {
       setMessages((prev) => {
@@ -140,86 +152,51 @@ export function GroupChat({
           cardConfig: msg.cardConfig,
         }));
 
-        // Enhanced deduplication: check by ID, userId+content+timestamp, and content+timestamp
-        // This prevents duplicates when userId changes between save and load
-        const existingIds = new Set(prev.map((m) => m.id));
-        const existingMessageKeys = new Set(
-          prev.map(
-            (m) => `${m.userId}:${m.content.substring(0, 50)}:${m.timestamp}`
-          )
-        );
-        // Also check by content+timestamp alone (to catch cases where userId might differ)
-        const existingContentKeys = new Set(
-          prev.map((m) => `${m.content.substring(0, 100)}:${m.timestamp}`)
-        );
+        // The cache always provides the full list of messages from the backend
+        // So we should replace the state entirely, not merge, to avoid duplicates
+        // Deduplicate within the new messages first (in case backend returns duplicates)
+        const uniqueMessages = newMessages.reduce(
+          (acc, msg) => {
+            // Use multiple keys for robust deduplication
+            const idKey = msg.id;
+            const contentKey = `${msg.userId}:${msg.content.substring(0, 50)}:${
+              msg.timestamp
+            }`;
+            const fullKey = `${idKey}:${contentKey}`;
 
-        const uniqueNewMessages = newMessages.filter((msg) => {
-          // Skip if ID already exists
-          if (existingIds.has(msg.id)) {
-            return false;
-          }
-          // Skip if same userId, content, and timestamp already exists
-          const messageKey = `${msg.userId}:${msg.content.substring(0, 50)}:${
-            msg.timestamp
-          }`;
-          if (existingMessageKeys.has(messageKey)) {
-            return false;
-          }
-          // Skip if same content and timestamp exists (even with different userId)
-          // This prevents messages from appearing as duplicates when userId changes
-          const contentKey = `${msg.content.substring(0, 100)}:${
-            msg.timestamp
-          }`;
-          if (existingContentKeys.has(contentKey)) {
-            // Check if we already have this exact message from a different user
-            // If timestamps are very close (within 1 second), it's likely a duplicate
-            const existingMsg = prev.find(
-              (m) =>
-                m.content.substring(0, 100) === msg.content.substring(0, 100) &&
-                Math.abs(m.timestamp - msg.timestamp) < 1000 // Within 1 second
-            );
-            if (existingMsg) {
-              // If timestamps are very close (within 500ms), it's definitely a duplicate
-              if (Math.abs(existingMsg.timestamp - msg.timestamp) < 500) {
-                return false;
-              }
+            // Check if we've already seen this message in the new batch
+            if (
+              !acc.seenIds.has(idKey) &&
+              !acc.seenKeys.has(contentKey) &&
+              !acc.seenFull.has(fullKey)
+            ) {
+              acc.seenIds.add(idKey);
+              acc.seenKeys.add(contentKey);
+              acc.seenFull.add(fullKey);
+              acc.messages.push(msg);
             }
+            return acc;
+          },
+          {
+            seenIds: new Set<string>(),
+            seenKeys: new Set<string>(),
+            seenFull: new Set<string>(),
+            messages: [] as Message[],
           }
-          return true;
-        });
+        ).messages;
 
-        if (uniqueNewMessages.length > 0 || prev.length === 0) {
-          const combined =
-            prev.length > 0 ? [...prev, ...uniqueNewMessages] : newMessages;
-          const uniqueMessages = combined.reduce(
-            (acc, msg) => {
-              const key = `${msg.id}:${msg.userId}:${msg.content.substring(
-                0,
-                50
-              )}:${msg.timestamp}`;
-              if (!acc.seen.has(key)) {
-                acc.seen.add(key);
-                acc.messages.push(msg);
-              }
-              return acc;
-            },
-            { seen: new Set<string>(), messages: [] as Message[] }
-          ).messages;
+        // Sort by timestamp
+        const sorted = uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
 
-          const sorted = uniqueMessages.sort(
-            (a, b) => a.timestamp - b.timestamp
-          );
-
-          // Update lastMessageId
-          if (sorted.length > 0) {
-            const lastId = sorted[sorted.length - 1].id;
-            lastMessageIdRef.current = lastId;
-            setLastMessageId(lastId);
-          }
-
-          return sorted;
+        // Update lastMessageId
+        if (sorted.length > 0) {
+          const lastId = sorted[sorted.length - 1].id;
+          lastMessageIdRef.current = lastId;
+          setLastMessageId(lastId);
         }
-        return prev;
+
+        // Always replace state with the new messages (cache provides full list)
+        return sorted;
       });
 
       // Extract users from messages
@@ -771,6 +748,11 @@ export function GroupChat({
                   key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
                   group={group}
                   groupIndex={groupIndex}
+                  sessionId={sessionId}
+                  userId={userId}
+                  onVoteUpdate={() =>
+                    refreshMessages(sessionId, userLocation || null)
+                  }
                 />
               ) : (
                 <UserMessage

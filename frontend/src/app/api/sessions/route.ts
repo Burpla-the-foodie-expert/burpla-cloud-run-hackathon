@@ -240,6 +240,31 @@ export async function POST(req: NextRequest) {
 
     if (action === "create") {
       const newSessionId = sessionId || generateId();
+
+      // Get user info from request body (userId and userName should be provided)
+      const requestUserId = userId || generateId();
+      const requestUserName = userName || "User";
+
+      // Create session in backend database
+      try {
+        const backendUrl = getApiUrl("/create_session");
+        await fetch(backendUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: newSessionId,
+            session_name: `Session ${newSessionId.substring(0, 8)}`,
+            owner_id: requestUserId,
+            user_id: requestUserId,
+            user_name: requestUserName,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to create session in backend:", error);
+        // Continue anyway - session will be created in memory
+      }
+
+      // Also create in-memory session
       if (!sessions.has(newSessionId)) {
         sessions.set(newSessionId, {
           id: newSessionId,
@@ -248,6 +273,7 @@ export async function POST(req: NextRequest) {
           createdAt: Date.now(),
         });
       }
+
       return NextResponse.json({ sessionId: newSessionId });
     }
 
@@ -257,6 +283,24 @@ export async function POST(req: NextRequest) {
           { error: "sessionId, userId, and userName are required" },
           { status: 400 }
         );
+      }
+
+      // Join session in backend database (this will create it if it doesn't exist)
+      try {
+        const backendUrl = getApiUrl("/create_session");
+        await fetch(backendUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            owner_id: userId, // Use current user as owner if creating new session
+            user_id: userId,
+            user_name: userName,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to join session in backend:", error);
+        // Continue anyway - session will be created in memory
       }
 
       let session = sessions.get(sessionId);

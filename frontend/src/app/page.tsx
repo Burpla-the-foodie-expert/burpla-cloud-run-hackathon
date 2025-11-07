@@ -29,6 +29,7 @@ export default function Home() {
       const userName = localStorage.getItem('userName')
       const userLocation = localStorage.getItem('userLocation')
       const storedUserId = localStorage.getItem('userId')
+      const storedSessionId = localStorage.getItem('currentSessionId')
 
       if (initialized === 'true' && userName) {
         setUserData({
@@ -45,6 +46,21 @@ export default function Home() {
         setUserId(newUserId)
       } else {
         setUserId(storedUserId)
+      }
+
+      // Check for session ID in URL or localStorage
+      const urlParams = new URLSearchParams(window.location.search)
+      const urlSessionId = urlParams.get('session')
+
+      if (urlSessionId) {
+        setSessionId(urlSessionId)
+        localStorage.setItem('currentSessionId', urlSessionId)
+      } else if (storedSessionId) {
+        setSessionId(storedSessionId)
+        // Update URL to match localStorage
+        const url = new URL(window.location.href)
+        url.searchParams.set('session', storedSessionId)
+        window.history.replaceState({}, '', url.toString())
       }
 
       setIsLoading(false)
@@ -69,7 +85,19 @@ export default function Home() {
   }
 
   const handleSessionChange = (id: string) => {
+    // Update session ID state
     setSessionId(id)
+
+    // Update localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentSessionId', id)
+
+      // Update URL
+      const url = new URL(window.location.href)
+      url.searchParams.set('session', id)
+      window.history.replaceState({}, '', url.toString())
+    }
+
     // Join session if user is initialized
     if (userData && userId) {
       fetch('/api/sessions', {
