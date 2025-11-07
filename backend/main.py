@@ -391,6 +391,7 @@ class UserLocation(BaseModel):
 class PlaceLocation(BaseModel):
     place_name: str
     address: str
+
 class CreateMarkersRequest(BaseModel):
     users_location: List[UserLocation] = Field(
         default=[
@@ -413,6 +414,24 @@ async def create_markers(request: CreateMarkersRequest):
     html = plot_named_locations_googlemap(request.users_location, request.places_location)
     return Response(content=html, media_type="text/html")
 
+class UserInfo(BaseModel):
+    user_id: str = Field(default="user_001")
+    name: Optional[str] = None
+    gmail: Optional[str] = None
+    preferences: Optional[str] = None
+    location: Optional[str] = None
+
+@app.post("/update_user_info")
+async def update_user_info(request: UserInfo):
+    """Update user information in the database."""
+    user_manager.update_user(
+        user_id=request.user_id,
+        name=request.name,
+        gmail=request.gmail,
+        preferences=request.preferences,
+        location=request.location
+    )
+    return {"status": "User information updated successfully"}
 
 if __name__ == "__main__":
     import uvicorn
