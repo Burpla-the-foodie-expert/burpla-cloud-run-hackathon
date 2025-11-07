@@ -6,6 +6,7 @@ import { DiscordChat } from '@/components/ai-elements/discord-chat'
 import { GroupChat } from '@/components/ai-elements/group-chat'
 import { SessionManager } from '@/components/ai-elements/session-manager'
 import { WelcomeScreen } from '@/components/ai-elements/welcome-screen'
+import { UsersPanel } from '@/components/ai-elements/users-panel'
 
 interface UserData {
   name: string
@@ -109,6 +110,7 @@ export default function Home() {
           />
         )}
       </div>
+      {sessionId && <UsersPanel sessionId={sessionId} currentUserId={userId} />}
     </main>
   )
 }
