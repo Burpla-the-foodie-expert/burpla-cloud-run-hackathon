@@ -1,6 +1,7 @@
 import sqlite3
 from config import DATABASE_PATH
 from datetime import datetime
+import uuid
 
 class UserManager:
     """Manages Users."""
@@ -99,5 +100,13 @@ class UserManager:
                 WHERE user_id = ?
             """, values)
 
-    # Added
-    # Huy Bui,
+    def authentication(self, gmail):
+        """Authenticate user by gmail."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT COUNT(*) FROM {self.table_name} WHERE gmail = ?", (gmail,))
+            response = cursor.fetchone()
+            print('#########', response)
+            if response and response[0] > 0:
+                return True
+            return False

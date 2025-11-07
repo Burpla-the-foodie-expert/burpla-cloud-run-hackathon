@@ -433,6 +433,17 @@ async def update_user_info(request: UserInfo):
     )
     return {"status": "User information updated successfully"}
 
+class AuthenticationRequest(BaseModel):
+    gmail: str  = Field(default="williamhuybui@gmail.com")
+
+@app.post("/authentication")
+async def authentication(request: AuthenticationRequest):
+    """Simple authentication endpoint if user exists based on gmail"""
+    is_authenticated = user_manager.authentication(request.gmail)
+    if not is_authenticated:
+        return {"is_authenticated": False, "detail": "Authentication failed"}
+    return {"is_authenticated": True, "detail": "Authentication successful"}
+
 if __name__ == "__main__":
     import uvicorn
 
