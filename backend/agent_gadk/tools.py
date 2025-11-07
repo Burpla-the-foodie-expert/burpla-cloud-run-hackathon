@@ -148,5 +148,3 @@ def generate_vote(place_ids: List[str]) -> dict:
     }
 
     return res
-
-# print(google_places_text_search("best pizza in New York"))

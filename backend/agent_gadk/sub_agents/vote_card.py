@@ -59,6 +59,7 @@ class VoteResponse(BaseModel):
                         "rating": "4.6",
                         "userRatingCount": 210,
                         "number_of_vote": 0,
+                        "vote_user_id_list": [],
                         "map": "https://maps.google.com/?q=Luigi’s+Trattoria"
                     }
                 ]
@@ -80,6 +81,8 @@ pipeline_vote_agent = Agent(
         Notes:
         - Always set "type" to "vote_card".
         - Ensure "vote_options" is a list of valid restaurant options with their IDs, names, and vote counts.
+        - number_of_vote: 0 (Always initialize to zero)
+        - vote_user_id_list": [], (Always initialize to empty list)
     """,
     tools=[generate_vote],
     output_schema=VoteResponse,

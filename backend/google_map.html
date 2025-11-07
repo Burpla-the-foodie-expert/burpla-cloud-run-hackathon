@@ -1,0 +1,91 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Google Map Visualization</title>
+        <meta name="viewport" content="initial-scale=1.0, width=device-width">
+        <meta charset="utf-8">
+        <style>
+            #map {
+                height: 100vh;
+                width: 100%;
+            }
+            .info-window {
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                line-height: 1.2;
+                margin: 0;
+                padding: 0;
+            }
+            .info-window b {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-bottom: 2px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>
+            function initMap() {
+                const map = new google.maps.Map(document.getElementById('map'), {
+                    zoom: 13,
+                    center: { lat: 0, lng: 0 }
+                });
+
+                const bounds = new google.maps.LatLngBounds();
+                const infoWindow = new google.maps.InfoWindow();
+
+                const users = [{lat:29.6302101, lng:-95.3780264, title:'👤 Huy', address:`12315 Churchill Downs Dr Houston, TX 77047`},{lat:29.9929116, lng:-95.633208, title:'👤 Huy Nguyen', address:`11815 catrose ln, TX 77429`}];
+                const places = [{lat:29.7588719, lng:-95.37084639999999, title:'📍 EOG office', address:`1111 Bagby St Lobby 2, Houston, TX 77002`},{lat:29.7052085, lng:-95.5435256, title:'📍 China Town', address:`11200 Bellaire Blvd, Houston, TX 77072`},{lat:29.7053152, lng:-95.55259679999999, title:'📍 Chicha San Chen', address:`9750 Bellaire Blvd, Houston, TX 77036`}];
+
+                // Add user markers (blue)
+                users.forEach(u => {
+                    const marker = new google.maps.Marker({
+                        position: {lat: u.lat, lng: u.lng},
+                        map,
+                        title: u.title,
+                        icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+                    });
+                    bounds.extend(marker.position);
+                    marker.addListener("click", () => {
+                        infoWindow.setContent(`
+                          <div class='info-window'>
+                            <b>${u.title}</b><br>${u.address}
+                          </div>`);
+                        infoWindow.open(map, marker);
+                    });
+                });
+
+                // Add place markers (red)
+                places.forEach(p => {
+                    const marker = new google.maps.Marker({
+                        position: {lat: p.lat, lng: p.lng},
+                        map,
+                        title: p.title,
+                        icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+                    });
+                    bounds.extend(marker.position);
+                    marker.addListener("click", () => {
+                        infoWindow.setContent(`
+                          <div class='info-window'>
+                            <b>${p.title}</b><br>${p.address}
+                          </div>`);
+                        infoWindow.open(map, marker);
+                    });
+                });
+
+                // Automatically fit map to show all points
+                map.fitBounds(bounds);
+
+                // Optional: prevent zooming in too far
+                google.maps.event.addListenerOnce(map, 'bounds_changed', function() {
+                    if (this.getZoom() > 17) this.setZoom(17);
+                });
+            }
+        </script>
+        <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDaYLjtbrjRqHguskL5R1t_ZgQtSuieHag&callback=initMap"></script>
+    </body>
+    </html>
+    

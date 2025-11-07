@@ -39,6 +39,11 @@ class ConvoManager:
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, ("session_002", "LOL Squad", "user_002", "user_002,user_003", "2025-02-10 08:00:00", "2025-11-05 18:20:00"))
 
+                cursor.execute(f"""
+                    INSERT INTO {self.table_name} (session_id, session_name, owner_id, member_id_list, created_date, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, ("session_003", "Demo", "user_003", "user_001,user_002,user_003", "2025-01-05 10:30:00", "2025-11-04 15:45:00"))
+
                 conn.commit()
         
     def add_convo(self, session_id, session_name, owner_id, member_id_list):
@@ -113,3 +118,4 @@ class ConvoManager:
                     "created_date": row[5]
                 })
             return convos
+    

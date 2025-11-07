@@ -12,7 +12,7 @@ class UserManager:
 
     def _initialize_db(self):
         """Creates the necessary table if it doesn't exist."""
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:  # Add timeout
             cursor = conn.cursor()
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (

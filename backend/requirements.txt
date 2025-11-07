@@ -1,5 +1,5 @@
 absolufy-imports==0.3.1
-alembic==1.16.5
+alembic==1.17.1
 annotated-doc==0.0.3
 annotated-types==0.7.0
 anyio==4.11.0
@@ -14,6 +14,7 @@ Authlib==1.6.5
 babel==2.17.0
 beautifulsoup4==4.14.2
 bleach==6.3.0
+branca==0.8.2
 cachetools==6.2.1
 certifi==2025.10.5
 cffi==2.0.0
@@ -30,6 +31,7 @@ dotenv==0.9.9
 executing==2.2.1
 fastapi==0.121.0
 fastjsonschema==2.21.2
+folium==0.20.0
 fqdn==1.5.1
 google-adk==1.18.0
 google-api-core==2.28.1
@@ -180,4 +182,5 @@ webencodings==0.5.1
 websocket-client==1.9.0
 websockets==15.0.1
 widgetsnbextension==4.0.15
+xyzservices==2025.10.0
 zipp==3.23.0
