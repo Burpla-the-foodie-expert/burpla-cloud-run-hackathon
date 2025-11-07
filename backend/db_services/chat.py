@@ -37,7 +37,7 @@ class ChatManager:
                         INSERT INTO {self.table_name} (session_id, user_id, message_id, content, timestamp)
                         VALUES (?, ?, ?, ?, ?)
                     """, (default_session, msg['user_id'], msg['message_id'], msg['content'], msg['timestamp']))
-            
+
 
     def save_chat_message(self, session_id, user_id, message_id, content):
         """Saves a single chat message to the database."""
@@ -48,6 +48,7 @@ class ChatManager:
                 INSERT INTO chat_sessions (session_id, user_id, content, message_id, timestamp)
                 VALUES (?, ?, ?, ?, ?)
             """, (session_id, user_id, content, message_id, current_time))
+            conn.commit()
 
     def load_chat_history(self, session_id):
         """Loads the chat history for a given session ID. If not found, creates a new session with a bot message."""
@@ -101,7 +102,7 @@ class ChatManager:
 
     def record_vote(self, session_id, user_id, message_id, vote_option_id, is_vote_up):
         """Records a vote for a restaurant in a conversation session.
-        
+
             Example vote card format:
             {
                 "message_id": "msg_001",

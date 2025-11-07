@@ -57,6 +57,14 @@ class Conversation(BaseModel):
     content: List[Dict[str, Any]] = Field(default=[])
 
 
+class CreateSessionRequest(BaseModel):
+    """Request to create or join a session"""
+    session_id: str
+    session_name: Optional[str] = None
+    owner_id: str
+    user_id: str
+    user_name: str
+
 class UserMessage(BaseModel):
     """User message payload"""
 
@@ -121,11 +129,43 @@ async def get_all_conversations(user_id: str):
 
 @app.get("/get_session")
 async def get_conversation_session(session_id: str = Query(..., example="session_003")):
-    """Retrieve conversation session by session ID"""
-    convo = chat_manager.load_chat_history(session_id)
-    if not convo:
+    """Retrieve conversation session by session ID, filtered to only include messages from session members"""
+    # Get all messages for the session
+    all_messages = chat_manager.load_chat_history(session_id)
+    if not all_messages:
         return HTTPException(status_code=404, detail="Conversation session not found")
-    return convo
+
+    # Get session members to filter messages
+    convo = convo_manager.get_convo(session_id)
+    session_member_ids = set()
+
+    if convo:
+        # Session exists in convo table, use member_id_list
+        member_list = convo["member_id_list"].split(",")
+        for member_id in member_list:
+            member_id = member_id.strip()
+            if member_id:
+                session_member_ids.add(member_id)
+    else:
+        # Session doesn't exist in convo table, extract members from messages
+        # This handles dynamically created sessions
+        for msg in all_messages:
+            user_id = msg.get("user_id", "")
+            if user_id and user_id not in ["bot", "burpla", "ai"]:
+                session_member_ids.add(user_id)
+
+    # Always include bot messages
+    session_member_ids.add("bot")
+    session_member_ids.add("burpla")
+    session_member_ids.add("ai")
+
+    # Filter messages to only include those from session members
+    filtered_messages = [
+        msg for msg in all_messages
+        if msg.get("user_id", "") in session_member_ids
+    ]
+
+    return filtered_messages
 
 
 @app.get("/get_user_info")
@@ -146,28 +186,130 @@ async def get_user_info(user_id: str = Query(..., example="user_001")):
     }
 
 
+@app.post("/create_session")
+async def create_or_join_session(request: CreateSessionRequest):
+    """Create a new session or join an existing one, saving to database"""
+    session_id = request.session_id
+    owner_id = request.owner_id
+    user_id = request.user_id
+    user_name = request.user_name
+    session_name = request.session_name or f"Session {session_id[:8]}"
+
+    # Check if session already exists in convo table
+    existing_convo = convo_manager.get_convo(session_id)
+
+    if existing_convo:
+        # Session exists, just add user to member list if not already there
+        member_list = existing_convo["member_id_list"].split(",")
+        member_list = [m.strip() for m in member_list if m.strip()]
+
+        if user_id not in member_list:
+            member_list.append(user_id)
+            # Update the member list in the database
+            updated_member_list = ",".join(member_list)
+            convo_manager.update_member_list(session_id, updated_member_list)
+    else:
+        # Create new session in convo table
+        member_list = [owner_id]
+        if user_id != owner_id:
+            member_list.append(user_id)
+
+        convo_manager.add_convo(
+            session_id=session_id,
+            session_name=session_name,
+            owner_id=owner_id,
+            member_id_list=",".join(member_list)
+        )
+
+    # Ensure user exists in user_manager (create if doesn't exist)
+    user_info = user_manager.get_user(user_id)
+    if not user_info:
+        # Create user if doesn't exist
+        user_manager.add_user(
+            user_id=user_id,
+            name=user_name,
+            gmail=None,
+            preferences=None,
+            location=None
+        )
+
+    # Initialize chat session if it doesn't exist (this creates a bot welcome message)
+    chat_manager.load_chat_history(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "message": "Session created or joined successfully"
+    }
+
+
 @app.get("/get_session_users_info")
 async def get_session_users_info(session_id: str = Query(..., example="session_001")):
     """Retrieve user information for all users in a conversation session"""
     convo = convo_manager.get_convo(session_id)
-    if not convo:
-        return HTTPException(status_code=404, detail="Conversation session not found")
 
-    user_ids = convo["member_id_list"].split(",")
-    users_info = []
-    for user_id in user_ids:
-        user_info = user_manager.get_user(user_id)
-        if user_info:
-            users_info.append(
-                {
-                    "user_id": user_info[0],
-                    "name": user_info[1],
-                    "email": user_info[2],
-                    "preferences": user_info[3],
-                    "location": user_info[4],
-                }
-            )
-    return users_info
+    if convo:
+        # Session exists in convo table, use member_id_list
+        user_ids = convo["member_id_list"].split(",")
+        users_info = []
+        for user_id in user_ids:
+            user_id = user_id.strip()  # Remove whitespace
+            if not user_id:  # Skip empty strings
+                continue
+            user_info = user_manager.get_user(user_id)
+            if user_info:
+                users_info.append(
+                    {
+                        "user_id": user_info[0],
+                        "name": user_info[1],
+                        "email": user_info[2],
+                        "preferences": user_info[3],
+                        "location": user_info[4],
+                    }
+                )
+        return users_info
+    else:
+        # Session doesn't exist in convo table, extract users from chat messages
+        # This handles dynamically created sessions
+        chat_messages = chat_manager.load_chat_history(session_id)
+        if not chat_messages:
+            return HTTPException(status_code=404, detail="Conversation session not found")
+
+        # Extract unique user IDs from messages (excluding bots)
+        user_ids = set()
+        for msg in chat_messages:
+            user_id = msg.get("user_id", "")
+            if user_id and user_id not in ["bot", "burpla", "ai"]:
+                user_ids.add(user_id)
+
+        # Get user info for each user ID
+        users_info = []
+        for user_id in user_ids:
+            user_info = user_manager.get_user(user_id)
+            if user_info:
+                users_info.append(
+                    {
+                        "user_id": user_info[0],
+                        "name": user_info[1],
+                        "email": user_info[2],
+                        "preferences": user_info[3],
+                        "location": user_info[4],
+                    }
+                )
+            else:
+                # If user not found in user_manager, still include them with basic info
+                # This handles frontend-generated user IDs
+                users_info.append(
+                    {
+                        "user_id": user_id,
+                        "name": user_id,  # Use user_id as name if not found
+                        "email": None,
+                        "preferences": None,
+                        "location": None,
+                    }
+                )
+
+        return users_info
 
 # Vote card
 @app.post("/vote")
@@ -243,8 +385,8 @@ async def send_user_message(message: UserMessage):
     return Response(status_code=204)  # No content response
 
 class UserLocation(BaseModel):
-    user_name: str 
-    address: str 
+    user_name: str
+    address: str
 
 class PlaceLocation(BaseModel):
     place_name: str

@@ -45,15 +45,27 @@ class ConvoManager:
                 """, ("session_003", "Demo", "user_003", "user_001,user_002,user_003", "2025-01-05 10:30:00", "2025-11-04 15:45:00"))
 
                 conn.commit()
-        
+
     def add_convo(self, session_id, session_name, owner_id, member_id_list):
         """Adds a new  to the database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            # Use INSERT OR IGNORE to avoid errors if session already exists
             cursor.execute(f"""
-                INSERT INTO {self.table_name} (session_id, session_name, owner_id, member_id_list)
+                INSERT OR IGNORE INTO {self.table_name} (session_id, session_name, owner_id, member_id_list)
                 VALUES (?, ?, ?, ?)
             """, (session_id, session_name, owner_id, member_id_list))
+            conn.commit()
+
+    def update_member_list(self, session_id, member_id_list):
+        """Updates the member_id_list for an existing session."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                UPDATE {self.table_name}
+                SET member_id_list = ?, last_updated = ?
+                WHERE session_id = ?
+            """, (member_id_list, datetime.now().isoformat(), session_id))
             conn.commit()
 
     def get_convo(self, session_id):
@@ -76,7 +88,7 @@ class ConvoManager:
                     "created_date": row[5]
                 }
             return None
-        
+
     def delete_convo(self, session_id):
         """Deletes a  from the database by session_id."""
         with sqlite3.connect(self.db_path) as conn:
@@ -85,7 +97,7 @@ class ConvoManager:
                 DELETE FROM {self.table_name}
                 WHERE session_id = ?
             """, (session_id,))
-            
+
     def update_last_updated(self, session_id):
         """Updates the last_updated timestamp of a conversation."""
         with sqlite3.connect(self.db_path) as conn:
@@ -118,4 +130,3 @@ class ConvoManager:
                     "created_date": row[5]
                 })
             return convos
-    

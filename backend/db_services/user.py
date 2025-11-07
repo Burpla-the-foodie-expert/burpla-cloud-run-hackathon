@@ -47,11 +47,13 @@ class UserManager:
         """Adds a new user to the database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            # Use INSERT OR IGNORE to avoid errors if user already exists
             cursor.execute(f"""
-                INSERT INTO {self.table_name} (user_id, name, gmail, preferences, location)
+                INSERT OR IGNORE INTO {self.table_name} (user_id, name, gmail, preferences, location)
                 VALUES (?, ?, ?, ?, ?)
             """, (user_id, name, gmail, preferences, location))
-    
+            conn.commit()
+
     def get_user(self, user_id):
         """Retrieves a user from the database by user_id."""
         with sqlite3.connect(self.db_path) as conn:
@@ -61,7 +63,7 @@ class UserManager:
                 WHERE user_id = ?
             """, (user_id,))
             return cursor.fetchone()
-    
+
     def delete_user(self, user_id):
         """Deletes a user from the database by user_id."""
         with sqlite3.connect(self.db_path) as conn:
@@ -70,7 +72,7 @@ class UserManager:
                 DELETE FROM {self.table_name}
                 WHERE user_id = ?
             """, (user_id,))
-    
+
     def update_user(self, user_id, name=None, gmail=None, preferences=None, location=None):
         """Updates user information in the database."""
         with sqlite3.connect(self.db_path) as conn:
@@ -96,6 +98,6 @@ class UserManager:
                 SET {set_clause}
                 WHERE user_id = ?
             """, values)
-    
-    # Added 
-    # Huy Bui, 
+
+    # Added
+    # Huy Bui,
