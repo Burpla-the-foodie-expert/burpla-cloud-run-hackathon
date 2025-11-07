@@ -1,4 +1,5 @@
 import type { InteractiveCardConfig } from "@/components/ai-elements/interactive-card";
+import { getApiUrl } from "@/lib/api-config";
 
 /**
  * Parse a Python dict string to JavaScript object
@@ -431,5 +432,111 @@ export function extractUsersFromConvoMessages(
   });
 
   return Array.from(userMap.values());
+}
+
+/**
+ * Load messages from backend /get_session endpoint
+ * Converts backend format to frontend format and parses card information
+ */
+export async function loadSessionMessagesFromBackend(
+  sessionId: string,
+  userLocation?: { lat: number; lng: number } | null
+): Promise<Array<{
+  id: string;
+  userId: string;
+  userName: string;
+  content: string;
+  role: "user" | "assistant";
+  timestamp: number;
+  cardConfig?: InteractiveCardConfig;
+}>> {
+  try {
+    const backendUrl = getApiUrl(`/get_session?session_id=${encodeURIComponent(sessionId)}`);
+    const response = await fetch(backendUrl, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      console.warn(`Failed to load session ${sessionId} from backend:`, response.status);
+      return [];
+    }
+
+    const backendMessages = await response.json();
+    if (!Array.isArray(backendMessages)) {
+      return [];
+    }
+
+    // Fetch user names for the session
+    let userNamesMap = new Map<string, string>();
+    try {
+      const usersUrl = getApiUrl(`/get_session_users_info?session_id=${encodeURIComponent(sessionId)}`);
+      const usersResponse = await fetch(usersUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (usersResponse.ok) {
+        const usersInfo = await usersResponse.json();
+        if (Array.isArray(usersInfo)) {
+          usersInfo.forEach((user: any) => {
+            if (user.user_id && user.name) {
+              userNamesMap.set(user.user_id, user.name);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load user names for session, will use fallback:", error);
+    }
+
+    // Convert backend format to frontend format
+    return backendMessages.map((msg: any) => {
+      // Backend format: { session_id, user_id, message_id, content, timestamp }
+      // Frontend format: { id, userId, userName, content, role, timestamp, cardConfig? }
+      const isBot = msg.user_id === "bot" || msg.user_id === "burpla";
+      const timestamp = msg.timestamp
+        ? new Date(msg.timestamp).getTime()
+        : Date.now();
+
+      // Get user name from map, or fallback to a formatted version of user_id
+      let userName: string;
+      if (isBot) {
+        userName = "Burpla";
+      } else {
+        const userId = msg.user_id || "unknown";
+        userName = userNamesMap.get(userId) || userId;
+        // If still using userId, try to format it nicely (e.g., "user_001" -> "User 001")
+        if (userName === userId && userId.startsWith("user_")) {
+          const numPart = userId.replace("user_", "");
+          userName = `User ${numPart}`;
+        }
+      }
+
+      // Parse card information from bot messages
+      let content = msg.content || "";
+      let cardConfig: InteractiveCardConfig | undefined = undefined;
+
+      if (isBot && content) {
+        // Parse message content to extract card information
+        const parsed = parseMessageForCard(content, userLocation);
+        content = parsed.content;
+        cardConfig = parsed.cardConfig;
+      }
+
+      return {
+        id: msg.message_id || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        userId: msg.user_id || "unknown",
+        userName,
+        content,
+        role: isBot ? ("assistant" as const) : ("user" as const),
+        timestamp,
+        ...(cardConfig && { cardConfig }), // Only include cardConfig if it exists
+      };
+    });
+  } catch (error) {
+    console.error(`Error loading messages from backend for session ${sessionId}:`, error);
+    return [];
+  }
 }
 

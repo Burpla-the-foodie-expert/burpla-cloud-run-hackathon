@@ -107,3 +107,22 @@ export function buildSystemMessage(
   return systemMessage;
 }
 
+/**
+ * Remove a user from all sessions (for logout)
+ * This removes the user from session user lists but keeps the session and messages intact
+ */
+export function removeUserFromSessions(userId: string): void {
+  sessions.forEach((session) => {
+    if (session.users.has(userId)) {
+      session.users.delete(userId);
+    }
+  });
+}
+
+/**
+ * Clear all sessions (for server cleanup)
+ */
+export function clearAllSessions(): void {
+  sessions.clear();
+}
+

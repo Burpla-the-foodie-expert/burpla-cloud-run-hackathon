@@ -2,6 +2,7 @@
 
 import { Users, Bot } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { subscribeToMessages, type CachedMessage } from '@/lib/message-cache'
 
 interface SessionUser {
   id: string
@@ -40,26 +41,34 @@ export function UsersPanel({ sessionId, currentUserId }: UsersPanelProps) {
       return
     }
 
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch(`/api/sessions?sessionId=${sessionId}`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.users) {
-            setUsers(data.users)
+    const handleMessagesUpdate = (messages: CachedMessage[]) => {
+      // Extract unique users from messages
+      const usersMap = new Map<string, SessionUser>()
+      messages.forEach((msg) => {
+        if (msg.userId && !usersMap.has(msg.userId)) {
+          usersMap.set(msg.userId, {
+            id: msg.userId,
+            name: msg.userName || msg.userId,
+            joinedAt: msg.timestamp,
+          })
+        } else if (msg.userId && usersMap.has(msg.userId)) {
+          // Update name if we have a better one
+          const existing = usersMap.get(msg.userId);
+          if (existing && msg.userName && msg.userName !== msg.userId) {
+            existing.name = msg.userName;
           }
         }
-      } catch (error) {
-        console.error('Failed to fetch users:', error)
-      }
+      })
+
+      setUsers(Array.from(usersMap.values()))
     }
 
-    fetchUsers()
+    // Subscribe to message updates (shared cache, no additional polling)
+    const unsubscribe = subscribeToMessages(sessionId, handleMessagesUpdate, null)
 
-    // Poll for user updates every 2 seconds
-    const interval = setInterval(fetchUsers, 2000)
-
-    return () => clearInterval(interval)
+    return () => {
+      unsubscribe()
+    }
   }, [sessionId])
 
   if (!sessionId) {

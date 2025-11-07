@@ -13,6 +13,11 @@ import {
   parseMessageForCard,
   type ConvoMessage,
 } from "@/lib/conversation-utils";
+import {
+  subscribeToMessages,
+  refreshMessages,
+  type CachedMessage,
+} from "@/lib/message-cache";
 import { getApiUrl } from "@/lib/api-config";
 
 function getAvatarColor(name: string) {
@@ -118,114 +123,142 @@ export function GroupChat({
   const mentionsRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
-  // Load initial messages and users on mount
+  // Subscribe to cached messages (shared across components)
   useEffect(() => {
     if (!sessionId) return;
 
-    const loadInitialData = async () => {
-      try {
-        // Load all messages (no lastMessageId filter on initial load)
-        const response = await fetch(`/api/sessions?sessionId=${sessionId}`);
-        if (response.ok) {
-          const data = await response.json();
+    const handleMessagesUpdate = (cachedMessages: CachedMessage[]) => {
+      setMessages((prev) => {
+        // Convert cached messages to Message format
+        const newMessages = cachedMessages.map((msg) => ({
+          id: msg.id,
+          userId: msg.userId,
+          userName: msg.userName,
+          content: msg.content,
+          role: msg.role,
+          timestamp: msg.timestamp,
+          cardConfig: msg.cardConfig,
+        }));
 
-          // Load all messages on initial mount
-          if (data.messages && data.messages.length > 0) {
-            setMessages((prev) => {
-              // Merge with existing messages, avoiding duplicates
-              const existingIds = new Set(prev.map((m) => m.id));
-              const newMessages = data.messages.filter(
-                (msg: Message) => !existingIds.has(msg.id)
-              );
-
-              if (newMessages.length > 0) {
-                const combined = [...prev, ...newMessages];
-                const sorted = combined.sort(
-                  (a, b) => a.timestamp - b.timestamp
-                );
-
-                // Update lastMessageId
-                if (sorted.length > 0) {
-                  const lastId = sorted[sorted.length - 1].id;
-                  lastMessageIdRef.current = lastId;
-                  setLastMessageId(lastId);
-                }
-
-                return sorted;
-              }
-              return prev;
-            });
-          }
-
-          // Update users list
-          if (data.users) {
-            setSessionUsers(data.users);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load initial data:", error);
-      }
-    };
-
-    loadInitialData();
-  }, [sessionId]);
-
-  // Poll for new messages and users
-  useEffect(() => {
-    if (!sessionId) return;
-
-    // Sync ref with state
-    lastMessageIdRef.current = lastMessageId;
-
-    const pollMessages = async () => {
-      try {
-        const currentLastId = lastMessageIdRef.current;
-        const response = await fetch(
-          `/api/sessions?sessionId=${sessionId}&lastMessageId=${
-            currentLastId || ""
-          }`
+        // Enhanced deduplication: check by ID, userId+content+timestamp, and content+timestamp
+        // This prevents duplicates when userId changes between save and load
+        const existingIds = new Set(prev.map((m) => m.id));
+        const existingMessageKeys = new Set(
+          prev.map(
+            (m) => `${m.userId}:${m.content.substring(0, 50)}:${m.timestamp}`
+          )
         );
-        if (response.ok) {
-          const data = await response.json();
-          if (data.messages && data.messages.length > 0) {
-            setMessages((prev) => {
-              const newMessages = data.messages.filter(
-                (msg: Message) =>
-                  !prev.some((m) => m.id === msg.id) && msg.id !== currentLastId
-              );
-              if (newMessages.length > 0) {
-                const combined = [...prev, ...newMessages];
-                // Sort by timestamp
-                const sorted = combined.sort(
-                  (a, b) => a.timestamp - b.timestamp
-                );
-                // Update lastMessageId
-                const lastId = sorted[sorted.length - 1].id;
-                lastMessageIdRef.current = lastId;
-                setLastMessageId(lastId);
-                return sorted;
-              }
-              return prev;
-            });
+        // Also check by content+timestamp alone (to catch cases where userId might differ)
+        const existingContentKeys = new Set(
+          prev.map((m) => `${m.content.substring(0, 100)}:${m.timestamp}`)
+        );
+
+        const uniqueNewMessages = newMessages.filter((msg) => {
+          // Skip if ID already exists
+          if (existingIds.has(msg.id)) {
+            return false;
           }
-          // Update users list
-          if (data.users) {
-            setSessionUsers(data.users);
+          // Skip if same userId, content, and timestamp already exists
+          const messageKey = `${msg.userId}:${msg.content.substring(0, 50)}:${
+            msg.timestamp
+          }`;
+          if (existingMessageKeys.has(messageKey)) {
+            return false;
+          }
+          // Skip if same content and timestamp exists (even with different userId)
+          // This prevents messages from appearing as duplicates when userId changes
+          const contentKey = `${msg.content.substring(0, 100)}:${
+            msg.timestamp
+          }`;
+          if (existingContentKeys.has(contentKey)) {
+            // Check if we already have this exact message from a different user
+            // If timestamps are very close (within 1 second), it's likely a duplicate
+            const existingMsg = prev.find(
+              (m) =>
+                m.content.substring(0, 100) === msg.content.substring(0, 100) &&
+                Math.abs(m.timestamp - msg.timestamp) < 1000 // Within 1 second
+            );
+            if (existingMsg) {
+              // If timestamps are very close (within 500ms), it's definitely a duplicate
+              if (Math.abs(existingMsg.timestamp - msg.timestamp) < 500) {
+                return false;
+              }
+            }
+          }
+          return true;
+        });
+
+        if (uniqueNewMessages.length > 0 || prev.length === 0) {
+          const combined =
+            prev.length > 0 ? [...prev, ...uniqueNewMessages] : newMessages;
+          const uniqueMessages = combined.reduce(
+            (acc, msg) => {
+              const key = `${msg.id}:${msg.userId}:${msg.content.substring(
+                0,
+                50
+              )}:${msg.timestamp}`;
+              if (!acc.seen.has(key)) {
+                acc.seen.add(key);
+                acc.messages.push(msg);
+              }
+              return acc;
+            },
+            { seen: new Set<string>(), messages: [] as Message[] }
+          ).messages;
+
+          const sorted = uniqueMessages.sort(
+            (a, b) => a.timestamp - b.timestamp
+          );
+
+          // Update lastMessageId
+          if (sorted.length > 0) {
+            const lastId = sorted[sorted.length - 1].id;
+            lastMessageIdRef.current = lastId;
+            setLastMessageId(lastId);
+          }
+
+          return sorted;
+        }
+        return prev;
+      });
+
+      // Extract users from messages
+      const usersMap = new Map<
+        string,
+        { id: string; name: string; joinedAt: number }
+      >();
+      cachedMessages.forEach((msg) => {
+        if (msg.userId && msg.userId !== "bot" && msg.userId !== "burpla") {
+          if (!usersMap.has(msg.userId)) {
+            usersMap.set(msg.userId, {
+              id: msg.userId,
+              name: msg.userName || msg.userId,
+              joinedAt: msg.timestamp,
+            });
+          } else {
+            const existing = usersMap.get(msg.userId);
+            if (existing && msg.userName && msg.userName !== msg.userId) {
+              existing.name = msg.userName;
+            }
           }
         }
-      } catch (error) {
-        console.error("Failed to fetch messages:", error);
+      });
+      if (usersMap.size > 0) {
+        setSessionUsers(Array.from(usersMap.values()));
       }
     };
 
-    // Poll every 2 seconds
-    const interval = setInterval(pollMessages, 2000);
+    // Subscribe to message updates
+    const unsubscribe = subscribeToMessages(
+      sessionId,
+      handleMessagesUpdate,
+      userLocation || null
+    );
 
-    // Also poll immediately
-    pollMessages();
-
-    return () => clearInterval(interval);
-  }, [sessionId, lastMessageId]);
+    return () => {
+      unsubscribe();
+    };
+  }, [sessionId, userLocation]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -382,10 +415,54 @@ export function GroupChat({
         timestamp,
       };
 
-      // Add user message to local state immediately
-      setMessages((prev) =>
-        [...prev, userMessage].sort((a, b) => a.timestamp - b.timestamp)
-      );
+      // Add user message to local state immediately, with enhanced deduplication
+      setMessages((prev) => {
+        // Enhanced deduplication: check by ID, userId+content+timestamp, and content+timestamp
+        const existingIds = new Set(prev.map((m) => m.id));
+        const existingMessageKeys = new Set(
+          prev.map(
+            (m) => `${m.userId}:${m.content.substring(0, 50)}:${m.timestamp}`
+          )
+        );
+        const existingContentKeys = new Set(
+          prev.map((m) => `${m.content.substring(0, 100)}:${m.timestamp}`)
+        );
+
+        const messageKey = `${
+          userMessage.userId
+        }:${userMessage.content.substring(0, 50)}:${userMessage.timestamp}`;
+        const contentKey = `${userMessage.content.substring(0, 100)}:${
+          userMessage.timestamp
+        }`;
+
+        // Skip if already exists (by ID, userId+content+timestamp, or content+timestamp)
+        if (
+          existingIds.has(userMessage.id) ||
+          existingMessageKeys.has(messageKey) ||
+          existingContentKeys.has(contentKey)
+        ) {
+          return prev;
+        }
+
+        const combined = [...prev, userMessage];
+        // Remove duplicates after combining
+        const uniqueMessages = combined.reduce(
+          (acc, msg) => {
+            const key = `${msg.id}:${msg.userId}:${msg.content.substring(
+              0,
+              50
+            )}:${msg.timestamp}`;
+            if (!acc.seen.has(key)) {
+              acc.seen.add(key);
+              acc.messages.push(msg);
+            }
+            return acc;
+          },
+          { seen: new Set<string>(), messages: [] as Message[] }
+        ).messages;
+
+        return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
+      });
 
       // Send message to session
       const sendResponse = await fetch("/api/sessions", {
@@ -399,6 +476,10 @@ export function GroupChat({
           messageId,
         }),
       });
+
+      // Don't refresh immediately - the optimistic update is already shown
+      // The cache will pick it up on the next poll cycle
+      // This prevents the message from appearing twice (once from optimistic update, once from refresh)
 
       // Only send to AI if @burpla is mentioned
       if (sendResponse.ok && messageMentionsBurpla) {
@@ -449,9 +530,47 @@ export function GroupChat({
               cardConfig: cardConfig,
             };
 
-            setMessages((prev) =>
-              [...prev, aiMessage].sort((a, b) => a.timestamp - b.timestamp)
-            );
+            setMessages((prev) => {
+              // Check if message already exists (by ID or by content + userId + timestamp)
+              const existingIds = new Set(prev.map((m) => m.id));
+              const existingMessageKeys = new Set(
+                prev.map(
+                  (m) =>
+                    `${m.userId}:${m.content.substring(0, 50)}:${m.timestamp}`
+                )
+              );
+
+              const messageKey = `${
+                aiMessage.userId
+              }:${aiMessage.content.substring(0, 50)}:${aiMessage.timestamp}`;
+
+              // Skip if already exists
+              if (
+                existingIds.has(aiMessage.id) ||
+                existingMessageKeys.has(messageKey)
+              ) {
+                return prev;
+              }
+
+              const combined = [...prev, aiMessage];
+              // Remove duplicates after combining
+              const uniqueMessages = combined.reduce(
+                (acc, msg) => {
+                  const key = `${msg.id}:${msg.userId}:${msg.content.substring(
+                    0,
+                    50
+                  )}:${msg.timestamp}`;
+                  if (!acc.seen.has(key)) {
+                    acc.seen.add(key);
+                    acc.messages.push(msg);
+                  }
+                  return acc;
+                },
+                { seen: new Set<string>(), messages: [] as Message[] }
+              ).messages;
+
+              return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
+            });
 
             // Save to session (still using Next.js API for session management)
             try {
@@ -470,6 +589,9 @@ export function GroupChat({
             } catch (sessionError) {
               console.error("Failed to save to session:", sessionError);
             }
+
+            // Don't refresh immediately - the AI message is already added optimistically
+            // The cache will pick it up on the next poll cycle
 
             setIsLoading(false);
             return; // Exit early since we got response from backend
@@ -497,9 +619,30 @@ export function GroupChat({
             role: "assistant",
             timestamp: Date.now(),
           };
-          setMessages((prev) =>
-            [...prev, errorMessage].sort((a, b) => a.timestamp - b.timestamp)
-          );
+          setMessages((prev) => {
+            // Check if message already exists
+            const existingIds = new Set(prev.map((m) => m.id));
+            if (existingIds.has(errorMessage.id)) {
+              return prev;
+            }
+            const combined = [...prev, errorMessage];
+            // Remove duplicates after combining
+            const uniqueMessages = combined.reduce(
+              (acc, msg) => {
+                const key = `${msg.id}:${msg.userId}:${msg.content.substring(
+                  0,
+                  50
+                )}:${msg.timestamp}`;
+                if (!acc.seen.has(key)) {
+                  acc.seen.add(key);
+                  acc.messages.push(msg);
+                }
+                return acc;
+              },
+              { seen: new Set<string>(), messages: [] as Message[] }
+            ).messages;
+            return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
+          });
           setIsLoading(false);
           return;
         }
@@ -520,9 +663,30 @@ export function GroupChat({
         role: "assistant",
         timestamp: Date.now(),
       };
-      setMessages((prev) =>
-        [...prev, errorMessage].sort((a, b) => a.timestamp - b.timestamp)
-      );
+      setMessages((prev) => {
+        // Check if message already exists
+        const existingIds = new Set(prev.map((m) => m.id));
+        if (existingIds.has(errorMessage.id)) {
+          return prev;
+        }
+        const combined = [...prev, errorMessage];
+        // Remove duplicates after combining
+        const uniqueMessages = combined.reduce(
+          (acc, msg) => {
+            const key = `${msg.id}:${msg.userId}:${msg.content.substring(
+              0,
+              50
+            )}:${msg.timestamp}`;
+            if (!acc.seen.has(key)) {
+              acc.seen.add(key);
+              acc.messages.push(msg);
+            }
+            return acc;
+          },
+          { seen: new Set<string>(), messages: [] as Message[] }
+        ).messages;
+        return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
+      });
     } finally {
       setIsLoading(false);
     }

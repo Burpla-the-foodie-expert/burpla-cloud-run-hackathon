@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sessions, type Session, type SessionMessage, type SessionUser } from "@/lib/session-store";
+import { sessions, type Session, type SessionMessage, type SessionUser, removeUserFromSessions } from "@/lib/session-store";
 import { getApiUrl } from "@/lib/api-config";
 import { parseMessageForCard } from "@/lib/conversation-utils";
 
@@ -30,6 +30,29 @@ async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessag
       return [];
     }
 
+    // Fetch user names for the session
+    let userNamesMap = new Map<string, string>();
+    try {
+      const usersUrl = getApiUrl(`/get_session_users_info?session_id=${encodeURIComponent(sessionId)}`);
+      const usersResponse = await fetch(usersUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (usersResponse.ok) {
+        const usersInfo = await usersResponse.json();
+        if (Array.isArray(usersInfo)) {
+          usersInfo.forEach((user: any) => {
+            if (user.user_id && user.name) {
+              userNamesMap.set(user.user_id, user.name);
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to load user names for session, will use fallback:", error);
+    }
+
     // Convert backend format to frontend format
     return backendMessages.map((msg: any) => {
       // Backend format: { session_id, user_id, message_id, content, timestamp }
@@ -38,6 +61,20 @@ async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessag
       const timestamp = msg.timestamp
         ? new Date(msg.timestamp).getTime()
         : Date.now();
+
+      // Get user name from map, or fallback to a formatted version of user_id
+      let userName: string;
+      if (isBot) {
+        userName = "Burpla";
+      } else {
+        const userId = msg.user_id || "unknown";
+        userName = userNamesMap.get(userId) || userId;
+        // If still using userId, try to format it nicely (e.g., "user_001" -> "User 001")
+        if (userName === userId && userId.startsWith("user_")) {
+          const numPart = userId.replace("user_", "");
+          userName = `User ${numPart}`;
+        }
+      }
 
       // Parse card information from bot messages
       let content = msg.content || "";
@@ -53,7 +90,7 @@ async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessag
       return {
         id: msg.message_id || generateId(),
         userId: msg.user_id || "unknown",
-        userName: isBot ? "Burpla" : msg.user_id || "Unknown",
+        userName,
         content,
         role: isBot ? ("assistant" as const) : ("user" as const),
         timestamp,
@@ -83,9 +120,10 @@ async function saveMessageToBackend(
       return; // Bot messages are handled by backend /sent endpoint
     }
 
-    // Backend requires specific user IDs (user_001, user_002, user_003)
-    // Use a fallback if the userId doesn't match the expected format
-    const backendUserId = userId.startsWith("user_") ? userId : "user_001";
+    // Preserve the original userId - don't convert to user_001
+    // The backend should accept any user_id format
+    // If backend requires specific format, we'll handle it in the backend
+    const backendUserId = userId;
 
     const backendUrl = getApiUrl("/sent");
     const response = await fetch(backendUrl, {
@@ -326,11 +364,31 @@ export async function POST(req: NextRequest) {
         ...(cardConfig && { cardConfig }), // Include cardConfig if provided
       };
 
-      // Remove duplicate if exists (for AI streaming updates)
-      const existingIndex = session.messages.findIndex((m) => m.id === newMessage.id);
-      if (existingIndex >= 0) {
-        session.messages[existingIndex] = newMessage;
+      // Enhanced deduplication: check by ID, userId+content+timestamp, and content+timestamp
+      // This prevents duplicates when userId might change between save and load
+      const existingById = session.messages.findIndex((m) => m.id === newMessage.id);
+      const existingByKey = session.messages.findIndex((m) =>
+        m.userId === newMessage.userId &&
+        m.content === newMessage.content &&
+        Math.abs(m.timestamp - newMessage.timestamp) < 1000 // Within 1 second
+      );
+      const existingByContent = session.messages.findIndex((m) =>
+        m.content === newMessage.content &&
+        Math.abs(m.timestamp - newMessage.timestamp) < 500 // Within 500ms (likely duplicate)
+      );
+
+      if (existingById >= 0) {
+        // Update existing message by ID
+        session.messages[existingById] = newMessage;
+      } else if (existingByKey >= 0) {
+        // Update existing message with same userId+content+timestamp
+        session.messages[existingByKey] = newMessage;
+      } else if (existingByContent >= 0) {
+        // Skip if same content+timestamp exists (likely a duplicate with different userId)
+        // Don't add the duplicate
+        console.log(`Skipping duplicate message: ${newMessage.content.substring(0, 50)}`);
       } else {
+        // New message, add it
         session.messages.push(newMessage);
       }
 
@@ -340,6 +398,22 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ success: true, message: newMessage });
+    }
+
+    if (action === "logout") {
+      const { userId } = body;
+
+      if (!userId) {
+        return NextResponse.json(
+          { error: "User ID is required for logout" },
+          { status: 400 }
+        );
+      }
+
+      // Remove user from all sessions
+      removeUserFromSessions(userId);
+
+      return NextResponse.json({ success: true, message: "User logged out from all sessions" });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { SessionProvider } from 'next-auth/react'
 import { Sidebar } from '@/components/ai-elements/sidebar'
 import { DiscordChat } from '@/components/ai-elements/discord-chat'
 import { GroupChat } from '@/components/ai-elements/group-chat'
@@ -11,6 +12,7 @@ import { UsersPanel } from '@/components/ai-elements/users-panel'
 interface UserData {
   name: string
   location: { lat: number; lng: number } | null
+  email?: string
 }
 
 export default function Home() {
@@ -52,6 +54,18 @@ export default function Home() {
   const handleWelcomeComplete = (data: UserData) => {
     setUserData(data)
     setIsInitialized(true)
+    // Store email if provided
+    if (data.email) {
+      localStorage.setItem('userEmail', data.email)
+    }
+  }
+
+  const handleUserUpdate = (data: { name: string; location: { lat: number; lng: number } | null }) => {
+    setUserData({
+      name: data.name,
+      location: data.location,
+      email: userData?.email,
+    })
   }
 
   const handleSessionChange = (id: string) => {
@@ -81,15 +95,23 @@ export default function Home() {
 
   if (!isInitialized) {
     return (
-      <main className="flex h-screen w-screen overflow-hidden">
-        <WelcomeScreen onComplete={handleWelcomeComplete} />
-      </main>
+      <SessionProvider>
+        <main className="flex h-screen w-screen overflow-hidden">
+          <WelcomeScreen onComplete={handleWelcomeComplete} />
+        </main>
+      </SessionProvider>
     )
   }
 
   return (
-    <main className="flex h-screen w-screen overflow-hidden">
-      <Sidebar userName={userData?.name} />
+    <SessionProvider>
+      <main className="flex h-screen w-screen overflow-hidden">
+      <Sidebar
+        userName={userData?.name}
+        currentSessionId={sessionId}
+        onSessionChange={handleSessionChange}
+        onUserUpdate={handleUserUpdate}
+      />
       <div className="flex-1 flex flex-col">
         <SessionManager
           sessionId={sessionId}
@@ -111,7 +133,8 @@ export default function Home() {
         )}
       </div>
       {sessionId && <UsersPanel sessionId={sessionId} currentUserId={userId} />}
-    </main>
+      </main>
+    </SessionProvider>
   )
 }
 
