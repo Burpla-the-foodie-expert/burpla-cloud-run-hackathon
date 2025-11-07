@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sessions, type Session, type SessionMessage, type SessionUser, removeUserFromSessions } from "@/lib/session-store";
+import {
+  sessions,
+  type Session,
+  type SessionMessage,
+  type SessionUser,
+  removeUserFromSessions,
+} from "@/lib/session-store";
 import { getApiUrl } from "@/lib/api-config";
 import { parseMessageForCard } from "@/lib/conversation-utils";
 
@@ -12,16 +18,23 @@ function generateId() {
 /**
  * Load messages from backend database and convert to frontend format
  */
-async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessage[]> {
+async function loadMessagesFromBackend(
+  sessionId: string
+): Promise<SessionMessage[]> {
   try {
-    const backendUrl = getApiUrl(`/get_session?session_id=${encodeURIComponent(sessionId)}`);
+    const backendUrl = getApiUrl(
+      `/get_session?session_id=${encodeURIComponent(sessionId)}`
+    );
     const response = await fetch(backendUrl, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
 
     if (!response.ok) {
-      console.warn(`Failed to load session ${sessionId} from backend:`, response.status);
+      console.warn(
+        `Failed to load session ${sessionId} from backend:`,
+        response.status
+      );
       return [];
     }
 
@@ -33,7 +46,9 @@ async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessag
     // Fetch user names for the session
     let userNamesMap = new Map<string, string>();
     try {
-      const usersUrl = getApiUrl(`/get_session_users_info?session_id=${encodeURIComponent(sessionId)}`);
+      const usersUrl = getApiUrl(
+        `/get_session_users_info?session_id=${encodeURIComponent(sessionId)}`
+      );
       const usersResponse = await fetch(usersUrl, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -50,7 +65,10 @@ async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessag
         }
       }
     } catch (error) {
-      console.warn("Failed to load user names for session, will use fallback:", error);
+      console.warn(
+        "Failed to load user names for session, will use fallback:",
+        error
+      );
     }
 
     // Convert backend format to frontend format
@@ -98,7 +116,10 @@ async function loadMessagesFromBackend(sessionId: string): Promise<SessionMessag
       };
     });
   } catch (error) {
-    console.error(`Error loading messages from backend for session ${sessionId}:`, error);
+    console.error(
+      `Error loading messages from backend for session ${sessionId}:`,
+      error
+    );
     return [];
   }
 }
@@ -155,11 +176,17 @@ async function saveMessageToBackend(
           }),
         });
       } else {
-        console.warn(`Backend save failed for session ${sessionId}:`, errorData);
+        console.warn(
+          `Backend save failed for session ${sessionId}:`,
+          errorData
+        );
       }
     }
   } catch (error) {
-    console.error(`Error saving message to backend for session ${sessionId}:`, error);
+    console.error(
+      `Error saving message to backend for session ${sessionId}:`,
+      error
+    );
     // Don't throw - allow message to be saved in memory even if backend save fails
   }
 }
@@ -205,10 +232,7 @@ export async function GET(req: NextRequest) {
       sessions.set(sessionId, session);
     } else {
       // No session found in backend either
-      return NextResponse.json(
-        { error: "Session not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
   }
 
@@ -235,8 +259,16 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { action, sessionId, userId, userName, message, messageId, cardConfig } =
-      await req.json();
+    const body = await req.json();
+    const {
+      action,
+      sessionId,
+      userId,
+      userName,
+      message,
+      messageId,
+      cardConfig,
+    } = body;
 
     if (action === "create") {
       const newSessionId = sessionId || generateId();
@@ -401,7 +433,7 @@ export async function POST(req: NextRequest) {
       const newMessage: SessionMessage = {
         id: finalMessageId,
         userId,
-        userName: isBot ? "Burpla" : (userData?.name || "Unknown"),
+        userName: isBot ? "Burpla" : userData?.name || "Unknown",
         content: message,
         role: isBot ? ("assistant" as const) : ("user" as const),
         timestamp: Date.now(),
@@ -410,15 +442,19 @@ export async function POST(req: NextRequest) {
 
       // Enhanced deduplication: check by ID, userId+content+timestamp, and content+timestamp
       // This prevents duplicates when userId might change between save and load
-      const existingById = session.messages.findIndex((m) => m.id === newMessage.id);
-      const existingByKey = session.messages.findIndex((m) =>
-        m.userId === newMessage.userId &&
-        m.content === newMessage.content &&
-        Math.abs(m.timestamp - newMessage.timestamp) < 1000 // Within 1 second
+      const existingById = session.messages.findIndex(
+        (m) => m.id === newMessage.id
       );
-      const existingByContent = session.messages.findIndex((m) =>
-        m.content === newMessage.content &&
-        Math.abs(m.timestamp - newMessage.timestamp) < 500 // Within 500ms (likely duplicate)
+      const existingByKey = session.messages.findIndex(
+        (m) =>
+          m.userId === newMessage.userId &&
+          m.content === newMessage.content &&
+          Math.abs(m.timestamp - newMessage.timestamp) < 1000 // Within 1 second
+      );
+      const existingByContent = session.messages.findIndex(
+        (m) =>
+          m.content === newMessage.content &&
+          Math.abs(m.timestamp - newMessage.timestamp) < 500 // Within 500ms (likely duplicate)
       );
 
       if (existingById >= 0) {
@@ -430,7 +466,9 @@ export async function POST(req: NextRequest) {
       } else if (existingByContent >= 0) {
         // Skip if same content+timestamp exists (likely a duplicate with different userId)
         // Don't add the duplicate
-        console.log(`Skipping duplicate message: ${newMessage.content.substring(0, 50)}`);
+        console.log(
+          `Skipping duplicate message: ${newMessage.content.substring(0, 50)}`
+        );
       } else {
         // New message, add it
         session.messages.push(newMessage);
@@ -457,7 +495,10 @@ export async function POST(req: NextRequest) {
       // Remove user from all sessions
       removeUserFromSessions(userId);
 
-      return NextResponse.json({ success: true, message: "User logged out from all sessions" });
+      return NextResponse.json({
+        success: true,
+        message: "User logged out from all sessions",
+      });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -468,4 +509,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

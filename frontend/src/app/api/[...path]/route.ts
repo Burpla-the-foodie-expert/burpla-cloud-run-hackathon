@@ -32,9 +32,11 @@ function getBackendBaseUrl(): string {
  */
 async function handleProxy(
   request: NextRequest,
-  { params }: { params: { path: string[] } }
+  context: { params: Promise<{ path: string[] }> }
 ) {
   try {
+    // In Next.js 15+, params are now a Promise - await them
+    const params = await context.params;
     const backendUrl = getBackendBaseUrl();
     const pathSegments = params.path || [];
     const backendPath = `/${pathSegments.join("/")}`;
@@ -124,11 +126,20 @@ async function handleProxy(
     return proxyResponse;
   } catch (error: any) {
     console.error(`[Proxy Error] Failed to proxy request:`, error);
+    // Try to get path from params if available, otherwise use request URL
+    let pathString = "unknown";
+    try {
+      const params = await context.params;
+      pathString = params.path?.join("/") || "unknown";
+    } catch {
+      // If params can't be accessed, use the request pathname
+      pathString = request.nextUrl.pathname;
+    }
     return NextResponse.json(
       {
         error: "Failed to proxy request to backend",
         message: error.message || "Unknown error",
-        path: params.path?.join("/"),
+        path: pathString,
       },
       { status: 502 }
     );
