@@ -17,10 +17,10 @@ FROM node:20-slim AS base
 # Set environment variables for NextAuth and others
 ARG NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
-ARG NEXT_AUTH_URL
-ENV NEXT_AUTH_URL=$NEXT_AUTH_URL
-ARG NEXT_AUTH_SECRET
-ENV NEXT_AUTH_SECRET=$NEXT_AUTH_SECRET
+ARG NEXTAUTH_URL
+ENV NEXTAUTH_URL=$NEXTAUTH_URL
+ARG NEXTAUTH_SECRET
+ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
 
 # Install pnpm
 ENV PNPM_HOME="/pnpm"
@@ -36,6 +36,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+RUN echo ">>> Dockerfile: NEXTAUTH_URL is $NEXTAUTH_URL"
 # Build the application
 RUN pnpm build
 

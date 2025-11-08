@@ -18,15 +18,21 @@ function AuthErrorContent() {
 
     // Map NextAuth error codes to user-friendly messages
     const errorMessages: Record<string, string> = {
-      Configuration: "There is a problem with the server configuration. Please contact support.",
+      Configuration:
+        "There is a problem with the server configuration. Please contact support.",
       AccessDenied: "You do not have permission to sign in.",
-      Verification: "The verification token has expired or has already been used.",
-      OAuthSignin: "Error occurred during OAuth sign-in. Please check your Google OAuth configuration.",
-      OAuthCallback: "Error occurred in OAuth callback. The redirect URI may not match your Google Cloud Console settings.",
+      Verification:
+        "The verification token has expired or has already been used.",
+      OAuthSignin:
+        "Error occurred during OAuth sign-in. Please check your Google OAuth configuration.",
+      OAuthCallback:
+        "Error occurred in OAuth callback. The redirect URI may not match your Google Cloud Console settings.",
       OAuthCreateAccount: "Could not create OAuth account. Please try again.",
       EmailCreateAccount: "Could not create email account. Please try again.",
-      Callback: "Error in OAuth callback. Check your redirect URI configuration.",
-      OAuthAccountNotLinked: "This email is already associated with another account.",
+      Callback:
+        "Error in OAuth callback. Check your redirect URI configuration.",
+      OAuthAccountNotLinked:
+        "This email is already associated with another account.",
       EmailSignin: "Error sending email. Please try again.",
       CredentialsSignin: "Invalid credentials provided.",
       SessionRequired: "You must be signed in to access this page.",
@@ -57,7 +63,9 @@ function AuthErrorContent() {
 
           {/* Error Message */}
           <div className="text-center space-y-2">
-            <h1 className="text-2xl font-bold text-white">Authentication Error</h1>
+            <h1 className="text-2xl font-bold text-white">
+              Authentication Error
+            </h1>
             <p className="text-[#b9bbbe]">{error}</p>
           </div>
 
@@ -69,11 +77,20 @@ function AuthErrorContent() {
             <ul className="text-xs text-[#72767d] space-y-1 list-disc list-inside">
               <li>Missing or incorrect Google OAuth credentials</li>
               <li>
-                <strong>Redirect URI mismatch:</strong> Make sure Google Cloud Console has exactly:{" "}
-                <code className="bg-[#2f3136] px-1 rounded">http://localhost:3000/api/auth/callback/google</code>
+                <strong>Redirect URI mismatch:</strong> Make sure Google Cloud
+                Console has exactly:{" "}
+                <code className="bg-[#2f3136] px-1 rounded">
+                  http://localhost:3000/api/auth/callback/google
+                </code>
               </li>
               <li>Missing NEXTAUTH_SECRET environment variable</li>
-              <li>NEXTAUTH_URL not set or incorrect (should be <code className="bg-[#2f3136] px-1 rounded">http://localhost:3000</code>)</li>
+              <li>
+                NEXTAUTH_URL not set or incorrect (should be{" "}
+                <code className="bg-[#2f3136] px-1 rounded">
+                  http://localhost:3000
+                </code>
+                )
+              </li>
               <li>Network or connectivity issues</li>
             </ul>
           </div>
@@ -89,7 +106,8 @@ function AuthErrorContent() {
 
           {/* Help Text */}
           <p className="text-xs text-center text-[#72767d]">
-            If this problem persists, please check your environment variables or contact support.
+            If this problem persists, please check your environment variables or
+            contact support.
           </p>
         </div>
       </div>
@@ -99,13 +117,14 @@ function AuthErrorContent() {
 
 export default function AuthErrorPage() {
   return (
-    <Suspense fallback={
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#202225]">
-        <div className="text-[#b9bbbe]">Loading...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#202225]">
+          <div className="text-[#b9bbbe]">Loading...</div>
+        </div>
+      }
+    >
       <AuthErrorContent />
     </Suspense>
   );
 }
-

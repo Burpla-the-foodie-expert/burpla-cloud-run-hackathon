@@ -4,12 +4,17 @@ import GoogleProvider from "next-auth/providers/google";
 // Validate required environment variables
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-const nextAuthSecret = process.env.NEXT_AUTH_SECRET;
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
+
+console.log(">>> auth.ts: Build-time NEXTAUTH_URL:", process.env.NEXTAUTH_URL);
+
 const nextAuthUrl =
-  process.env.NEXT_AUTH_URL ||
+  process.env.NEXTAUTH_URL ||
   (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000");
+
+console.log(">>> auth.ts: Resolved nextAuthUrl:", nextAuthUrl);
 
 // Log warnings if environment variables are missing (only in development)
 if (process.env.NODE_ENV === "development") {

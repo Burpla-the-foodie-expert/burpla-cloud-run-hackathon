@@ -14,6 +14,7 @@ NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
 For production, set this to your deployed backend URL:
+
 ```bash
 NEXT_PUBLIC_BACKEND_URL=https://your-backend-api.com
 ```
@@ -27,11 +28,13 @@ NEXT_PUBLIC_BACKEND_URL=https://your-backend-api.com
 ### Verifying Configuration
 
 You can check which backend URL is being used by:
+
 1. Opening the browser console
 2. Sending a message to @burpla
 3. Looking for the log message: `[GroupChat] Calling backend API: ...`
 
 If you see `http://localhost:3000/api/sent`, the environment variable is not being read correctly. Make sure:
+
 - The `.env.local` file is in the `frontend` directory
 - The variable is named `NEXT_PUBLIC_BACKEND_URL` (not `BACKEND_URL`)
 - You've restarted the Next.js dev server after creating/modifying `.env.local`
@@ -70,6 +73,7 @@ NEXTAUTH_SECRET=your_random_secret_string_here
 ```
 
 Generate a random secret using:
+
 ```bash
 openssl rand -base64 32
 ```
@@ -94,19 +98,23 @@ After setting up the environment variables:
 If you're redirected to `/api/auth/error`:
 
 1. **Check environment variables:**
+
    - Verify all 4 variables are set in `.env.local`
    - Make sure you've restarted the dev server after adding them
 
 2. **Check Google Cloud Console:**
+
    - Verify the redirect URI matches exactly: `http://localhost:3000/api/auth/callback/google`
    - Make sure there are no extra spaces or typos
    - The URI must match exactly (including http vs https, trailing slashes, etc.)
 
 3. **Check NEXTAUTH_SECRET:**
+
    - Must be a random string (use `openssl rand -base64 32`)
    - Should be at least 32 characters long
 
 4. **Check NEXTAUTH_URL:**
+
    - For local development: `http://localhost:3000`
    - For production: your full domain URL (e.g., `https://your-app.com`)
 
@@ -115,4 +123,3 @@ If you're redirected to `/api/auth/error`:
    - Check the Network tab for failed requests
 
 The custom error page at `/auth/error` will display helpful error messages if authentication fails.
-
