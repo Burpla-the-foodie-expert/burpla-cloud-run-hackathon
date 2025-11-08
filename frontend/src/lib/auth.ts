@@ -4,9 +4,12 @@ import GoogleProvider from "next-auth/providers/google";
 // Validate required environment variables
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-const nextAuthSecret = process.env.NEXTAUTH_SECRET;
-const nextAuthUrl = process.env.NEXTAUTH_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+const nextAuthSecret = process.env.NEXT_AUTH_SECRET;
+const nextAuthUrl =
+  process.env.NEXT_AUTH_URL ||
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");
 
 // Log warnings if environment variables are missing (only in development)
 if (process.env.NODE_ENV === "development") {
@@ -76,4 +79,3 @@ export const authOptions: NextAuthOptions = {
   secret: nextAuthSecret || "fallback-secret-for-development-only",
   debug: process.env.NODE_ENV === "development",
 };
-
