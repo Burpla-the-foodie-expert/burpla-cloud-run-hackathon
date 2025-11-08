@@ -6,10 +6,6 @@ steps:
       - "northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/burpla/burpla-ui:sha-${_GITHUB_SHA}"
       - "--build-arg"
       - "NEXT_PUBLIC_BACKEND_URL=${_BACKEND_URL}"
-      - "--build-arg"
-      - "NEXTAUTH_URL=${_AUTH_URL}"
-      - "--build-arg"
-      - "NEXTAUTH_SECRET=${_AUTH_SECRET}"
       - "."
 images:
   - "northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/burpla/burpla-ui:sha-${_GITHUB_SHA}"
