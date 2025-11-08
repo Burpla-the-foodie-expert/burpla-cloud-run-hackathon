@@ -106,7 +106,6 @@ class UserManager:
             cursor = conn.cursor()
             cursor.execute(f"SELECT COUNT(*) FROM {self.table_name} WHERE gmail = ?", (gmail,))
             response = cursor.fetchone()
-            print('#########', response)
             if response and response[0] > 0:
                 return True
             return False

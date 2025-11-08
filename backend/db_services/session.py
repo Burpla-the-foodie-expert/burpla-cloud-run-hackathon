@@ -2,7 +2,7 @@ import sqlite3
 from config import DATABASE_PATH
 from datetime import datetime
 
-class ConvoManager:
+class SessionManager:
     """Manage ."""
 
     def __init__(self, db_path="burbla.db"):
@@ -46,7 +46,7 @@ class ConvoManager:
 
                 conn.commit()
 
-    def add_convo(self, session_id, session_name, owner_id, member_id_list):
+    def add_session(self, session_id, session_name, owner_id, member_id_list):
         """Adds a new  to the database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -68,7 +68,26 @@ class ConvoManager:
             """, (member_id_list, datetime.now().isoformat(), session_id))
             conn.commit()
 
-    def get_convo(self, session_id):
+    #Change name and member list
+    def update_session(self, session_id, session_name=None, member_id_list=None):
+        """Updates the session_name and/or member_id_list for an existing session."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            if session_name:
+                cursor.execute(f"""
+                    UPDATE {self.table_name}
+                    SET session_name = ?, last_updated = ?
+                    WHERE session_id = ?
+                """, (session_name, datetime.now().isoformat(), session_id))
+            if member_id_list:
+                cursor.execute(f"""
+                    UPDATE {self.table_name}
+                    SET member_id_list = ?, last_updated = ?
+                    WHERE session_id = ?
+                """, (member_id_list, datetime.now().isoformat(), session_id))
+            conn.commit()
+
+    def get(self, session_id):
         """Retrieves a conversation from the database by session_id."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -89,7 +108,7 @@ class ConvoManager:
                 }
             return None
 
-    def delete_convo(self, session_id):
+    def delete(self, session_id):
         """Deletes a  from the database by session_id."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -109,7 +128,7 @@ class ConvoManager:
             """, (datetime.now().isoformat(), session_id))
             conn.commit()
 
-    def list_convos_for_user(self, user_id):
+    def get_all(self, user_id):
         """Lists all convos where the user belongs to member_id_list, ordered by last_updated DESC."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
