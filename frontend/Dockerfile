@@ -36,7 +36,9 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN echo ">>> Dockerfile: NEXTAUTH_URL is $NEXTAUTH_URL"
+RUN echo ">>> Dockerfile: Building with GOOGLE_MAP_API: $NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"
+RUN echo ">>> Dockerfile: Building with GOOGLE_API_KEY: $NEXT_PUBLIC_GOOGLE_API_KEY"
+
 # Build the application
 RUN pnpm build
 
