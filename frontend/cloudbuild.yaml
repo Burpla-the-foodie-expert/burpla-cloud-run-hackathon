@@ -6,9 +6,15 @@ steps:
       - "northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/burpla/burpla-ui:sha-${_GITHUB_SHA}"
       - "--build-arg"
       - "NEXT_PUBLIC_BACKEND_URL=${_BACKEND_URL}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${_GOOGLE_MAP_API}"
+      - "--build-arg"
+      - "NEXT_PUBLIC_GOOGLE_API_KEY=${_GOOGLE_API_KEY}"
       - "."
 images:
   - "northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/burpla/burpla-ui:sha-${_GITHUB_SHA}"
 substitutions:
   _BACKEND_URL: "http://localhost:8000" # Default value
   _GITHUB_SHA: "latest" # Default value
+  _GOOGLE_MAP_API: "" # Default value
+  _GOOGLE_API_KEY: "" # Default value

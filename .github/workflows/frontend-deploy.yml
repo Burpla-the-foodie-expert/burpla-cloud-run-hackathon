@@ -30,7 +30,7 @@ jobs:
         run: |-
           gcloud builds submit ./frontend \
             --config=./frontend/cloudbuild.yaml \
-            --substitutions=_BACKEND_URL="https://burpla-api-415080714475.northamerica-northeast1.run.app",_GITHUB_SHA="${{ github.sha }}"
+            --substitutions=_BACKEND_URL="https://burpla-api-415080714475.northamerica-northeast1.run.app",_GITHUB_SHA="${{ github.sha }}",_GOOGLE_MAP_API="${{ secrets.GOOGLE_MAP_API }}",_GOOGLE_API_KEY="${{ secrets.GOOGLE_API_KEY }}"
 
       - name: Deploy to Cloud Run
         id: deploy
