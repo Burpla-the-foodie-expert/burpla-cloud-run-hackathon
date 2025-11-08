@@ -45,3 +45,22 @@ async def update_user_info(request: UserInfo):
         location=request.location,
     )
     return {"status": "User information updated successfully"}
+
+#Add user
+@router.post("/add")
+async def add_user(request: UserInfo):
+    """Add a new user to the database."""
+    existing_user = user_manager.get_user(request.user_id)
+    if existing_user:
+        return HTTPException(
+            status_code=400,
+            detail="User ID already exists. Please choose a different user ID.",
+        )
+    user_manager.add_user(
+        user_id=request.user_id,
+        name=request.name,
+        gmail=request.gmail,
+        preferences=request.preferences,
+        location=request.location,
+    )
+    return {"status": "User added successfully"}
