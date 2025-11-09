@@ -34,14 +34,75 @@ async def vote_card(
     is_vote_up: bool = Query(..., example=True),
 ):
     """Record a vote for a restaurant in a conversation session"""
-    chat_manager.record_vote(
-        session_id=session_id,
-        user_id=user_id,
-        message_id=message_id,
-        vote_option_id=vote_option_id,
-        is_vote_up=is_vote_up,
-    )
-    return {"status": "Vote recorded successfully"}
+    try:
+        # Record the vote and get restaurant name
+        restaurant_name = chat_manager.record_vote(
+            session_id=session_id,
+            user_id=user_id,
+            message_id=message_id,
+            vote_option_id=vote_option_id,
+            is_vote_up=is_vote_up,
+        )
+
+        # If vote was successfully recorded, create a chat message and send to bot
+        if restaurant_name:
+            # Get user info to include their name in the message
+            user_info = user_manager.get_user(user_id)
+            user_name = user_info[1] if user_info else "User"
+
+            # Create vote message
+            vote_message = f"I voted for {restaurant_name}" if is_vote_up else f"I removed my vote for {restaurant_name}"
+
+            # Save the vote as a chat message
+            vote_message_id = f"msg_{str(uuid.uuid4())}"
+            chat_manager.save_chat_message(
+                session_id=session_id,
+                user_id=user_id,
+                message_id=vote_message_id,
+                content=vote_message,
+            )
+
+            # Send the vote message to the bot agent for processing
+            try:
+                logger.info(f"📝 Vote message: {vote_message}")
+                bot_response = await run_conversation(
+                    vote_message, app_name="burpla", user_id=user_id, session_id=session_id
+                )
+
+                logger.info(f"✅ Bot response to vote: {bot_response}")
+
+                # Save the bot's response
+                response_message_id = f"msm_{str(uuid.uuid4())}"
+                chat_manager.save_chat_message(
+                    session_id=session_id,
+                    user_id="bot",
+                    message_id=response_message_id,
+                    content=bot_response,
+                )
+            except Exception as bot_error:
+                # Log the error but don't fail the vote - the vote was already recorded
+                logger.error(f"Error sending vote message to bot: {bot_error}")
+                import traceback
+                logger.error(traceback.format_exc())
+
+            # Update session last updated timestamp
+            convo_manager.update_last_updated(session_id)
+
+            logger.info(f"User {user_name} ({user_id}) voted for {restaurant_name} in session {session_id}")
+
+        return {"status": "Vote recorded successfully"}
+    except ValueError as e:
+        logger.error(f"Error recording vote: {e}")
+        # Return 400 for validation errors (like invalid JSON format)
+        raise HTTPException(status_code=400, detail=str(e))
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error when recording vote: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON format in message content: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error recording vote: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.post("/create_markers")
@@ -64,11 +125,14 @@ async def send_user_message(message: UserMessage):
     input_message_id = f"msg_{str(uuid.uuid4())}"
 
     if not user_info:
-        return HTTPException(
+        # User not found - this shouldn't happen if authentication worked correctly
+        # Raise an error to ensure data integrity
+        error_msg = f"User {user_id} not found in users table. Please authenticate first."
+        logger.error(error_msg)
+        raise HTTPException(
             status_code=404,
-            detail="User not found (Available users id: user_001, user_002, user_003)",
+            detail=error_msg
         )
-    # Save input message to chat history (Automatically update timestamp)
     chat_manager.save_chat_message(
         session_id=session_id,
         user_id=user_id,
@@ -77,12 +141,14 @@ async def send_user_message(message: UserMessage):
     )
 
     if message.is_to_agent:
+
         # Wrapper for user info
         query_wrapper = f"""
             Information about the user for more context: Name: {user_info[1]}, Preferences: {user_info[3]}, Location: {user_info[4]}
             Only use it if the user query requires more context about the user.
             Query: {query}
         """
+
         # logger.info(query_wrapper)
         logger.info(f"📝 Query: {query_wrapper}")
         response = await run_conversation(

@@ -10,9 +10,10 @@ import {
   Info,
   Utensils,
   Check,
+  Image as ImageIcon,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import { getApiUrl } from "@/lib/api-config";
 
 // Google Maps types
@@ -168,9 +169,32 @@ function RestaurantMap({
   userLocation?: RestaurantLocation;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
+  const previousRestaurantsKeyRef = useRef<string>("");
+  const previousUserLocationKeyRef = useRef<string | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Create stable key for restaurants to detect actual changes
+  const restaurantsKey = useMemo(() => {
+    return JSON.stringify(
+      restaurants.map((r) => ({
+        id: r.id,
+        name: r.name,
+        lat: r.location_coordinates?.latitude,
+        lng: r.location_coordinates?.longitude,
+        address: r.formattedAddress || r.address || r.location,
+      }))
+    );
+  }, [restaurants]);
+
+  // Create stable key for userLocation
+  const userLocationKey = useMemo(() => {
+    return userLocation ? `${userLocation.lat},${userLocation.lng}` : null;
+  }, [userLocation]);
 
   // Get Google Maps API key from environment
   const apiKey =
@@ -254,6 +278,28 @@ function RestaurantMap({
       !window.google.maps
     ) {
       return;
+    }
+
+    // Check if data has actually changed
+    const dataChanged =
+      restaurantsKey !== previousRestaurantsKeyRef.current ||
+      userLocationKey !== previousUserLocationKeyRef.current;
+
+    // If map is already initialized and data hasn't changed, don't re-initialize
+    if (mapInstanceRef.current && !dataChanged) {
+      return;
+    }
+
+    // If data changed and map exists, clean up old markers
+    if (mapInstanceRef.current && dataChanged) {
+      markersRef.current.forEach((marker) => {
+        marker.setMap(null);
+      });
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+      }
+      markersRef.current = [];
+      userMarkerRef.current = null;
     }
 
     // Geocode restaurants that don't have coordinates
@@ -359,11 +405,12 @@ function RestaurantMap({
           fullscreenControl: true,
         });
 
+        // Store map instance to prevent re-initialization
+        mapInstanceRef.current = map;
+
         // Create bounds to fit all markers
         const bounds = new window.google.maps.LatLngBounds();
         const infoWindow = new window.google.maps.InfoWindow();
-        const newMarkers: any[] = [];
-        let userMarker: any = null;
 
         // Add markers for each restaurant
         restaurantsWithCoords.forEach((restaurant) => {
@@ -398,7 +445,7 @@ function RestaurantMap({
           });
 
           bounds.extend(position);
-          newMarkers.push(marker);
+          markersRef.current.push(marker);
 
           // Add click listener to show info window
           marker.addListener("click", () => {
@@ -437,7 +484,7 @@ function RestaurantMap({
 
         // Add user location marker if available
         if (userLocation) {
-          userMarker = new window.google.maps.Marker({
+          userMarkerRef.current = new window.google.maps.Marker({
             position: { lat: userLocation.lat, lng: userLocation.lng },
             map,
             title: "Your Location",
@@ -467,16 +514,9 @@ function RestaurantMap({
           map.setZoom(15);
         }
 
-        // Cleanup function
-        return () => {
-          // Remove all markers
-          newMarkers.forEach((marker) => {
-            marker.setMap(null);
-          });
-          if (userMarker) {
-            userMarker.setMap(null);
-          }
-        };
+        // Update previous keys
+        previousRestaurantsKeyRef.current = restaurantsKey;
+        previousUserLocationKeyRef.current = userLocationKey;
       } catch (error: any) {
         console.error("Error initializing Google Map:", error);
         setMapError(error.message || "Failed to initialize map");
@@ -485,7 +525,22 @@ function RestaurantMap({
     };
 
     initializeMap();
-  }, [mapLoaded, restaurants, userLocation]);
+
+    // Cleanup: clear markers when component unmounts
+    return () => {
+      markersRef.current.forEach((marker) => {
+        marker.setMap(null);
+      });
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+      }
+      markersRef.current = [];
+      userMarkerRef.current = null;
+    };
+    // We intentionally use restaurantsKey and userLocationKey instead of restaurants and userLocation
+    // to prevent re-renders when only the object reference changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapLoaded, restaurantsKey, userLocationKey]);
 
   // Show error state
   if (mapError) {
@@ -532,6 +587,69 @@ function RestaurantMap({
   return (
     <div className="w-full h-80 bg-[#1e1f22] rounded-lg overflow-hidden border border-[#40444b]">
       <div ref={mapRef} className="w-full h-full" />
+    </div>
+  );
+}
+
+// Memoize RestaurantMap to prevent re-renders when parent re-renders
+const MemoizedRestaurantMap = memo(RestaurantMap);
+
+// Image component with error handling
+function RestaurantImage({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+
+  const handleError = () => {
+    setImageError(true);
+    setImageLoading(false);
+  };
+
+  const handleLoad = () => {
+    setImageLoading(false);
+  };
+
+  if (imageError) {
+    return (
+      <div
+        className={`${
+          className || ""
+        } bg-[#1e1f22] flex items-center justify-center border border-[#40444b]`}
+      >
+        <ImageIcon className="w-8 h-8 text-[#72767d]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      {imageLoading && (
+        <div
+          className={`${
+            className || ""
+          } bg-[#1e1f22] flex items-center justify-center border border-[#40444b] absolute inset-0`}
+        >
+          <div className="w-4 h-4 border-2 border-[#5865f2] border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`${className || ""} ${
+          imageLoading ? "opacity-0" : "opacity-100"
+        } transition-opacity`}
+        onError={handleError}
+        onLoad={handleLoad}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+      />
     </div>
   );
 }
@@ -615,7 +733,7 @@ function RestaurantRecommendationCard({
       {/* Google Map with pinned restaurants */}
       {restaurantsWithLocation.length > 0 && (
         <div className="p-4 border-b border-[#40444b]">
-          <RestaurantMap
+          <MemoizedRestaurantMap
             restaurants={sortedRestaurants}
             userLocation={userLocation}
           />
@@ -653,7 +771,7 @@ function RestaurantRecommendationCard({
               <div className="flex gap-4">
                 {restaurant.photoUri && (
                   <div className="flex-shrink-0">
-                    <img
+                    <RestaurantImage
                       src={restaurant.photoUri}
                       alt={restaurantName}
                       className="w-20 h-20 rounded-lg object-cover"
@@ -804,7 +922,7 @@ function VotingCard({
     try {
       // Call backend vote endpoint
       const voteUrl = getApiUrl(
-        `/vote?session_id=${encodeURIComponent(
+        `/chat/vote?session_id=${encodeURIComponent(
           sessionId
         )}&user_id=${encodeURIComponent(
           userId
@@ -967,7 +1085,7 @@ function VotingCard({
               <div className="flex gap-4 mb-3">
                 {imageUri && (
                   <div className="flex-shrink-0">
-                    <img
+                    <RestaurantImage
                       src={imageUri}
                       alt={displayName}
                       className="w-20 h-20 rounded-lg object-cover"
@@ -1041,7 +1159,11 @@ function VotingCard({
                       onClick={() =>
                         handleVote(option.id || option.restaurant_id || "")
                       }
-                      disabled={isVoting}
+                      disabled={
+                        isVoting ||
+                        (votedOptionId !== null &&
+                          votedOptionId !== (option.id || option.restaurant_id))
+                      }
                       className={`px-3 py-1 text-white text-sm rounded transition-colors flex items-center gap-1.5 ${
                         votedOptionId === (option.id || option.restaurant_id)
                           ? "bg-[#57f287] hover:bg-[#4ae077]"

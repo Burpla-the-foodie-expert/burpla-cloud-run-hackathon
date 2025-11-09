@@ -92,23 +92,23 @@ export function DiscordChat({
     });
 
   return (
-    <div className="flex flex-col h-screen bg-[#121212]">
-      {/* Channel header */}
-      <div className="h-12 border-b border-[#333333] flex items-center px-4 shadow-sm bg-[#1e1e1e]">
+    <div className="flex flex-col h-full bg-[#121212]">
+      {/* Channel header - hidden on mobile as we have header in main page */}
+      <div className="hidden md:flex sticky top-0 z-10 h-12 border-b border-[#333333] items-center px-4 shadow-sm bg-[#1e1e1e]">
         <Hash className="w-5 h-5 text-[#9e9e9e] mr-2" />
-        <span className="text-[#e0e0e0] font-semibold">ai-chat</span>
+        <span className="text-[#e0e0e0] font-semibold">burpla</span>
         <span className="ml-2 text-xs text-[#9e9e9e]">
           AI-powered conversations
         </span>
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 bg-[#121212]">
+      <div className="flex-1 overflow-y-auto px-2 md:px-4 py-2 md:py-4 bg-[#121212]">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="text-[#9e9e9e] text-lg mb-2">
-                Welcome to #ai-chat
+                Welcome to #burpla
               </div>
               <div className="text-[#9e9e9e] text-sm">
                 Start a conversation by typing a message below
@@ -120,7 +120,7 @@ export function DiscordChat({
             {groupedMessages.map((group, groupIndex) => (
               <div
                 key={groupIndex}
-                className="group hover:bg-[#1e1e1e] rounded-lg px-4 py-3 mb-3 transition-colors bg-[#2a2a2a]"
+                className="group hover:bg-[#1e1e1e] rounded-lg px-2 md:px-4 py-2 md:py-3 mb-2 md:mb-3 transition-colors bg-[#2a2a2a]"
               >
                 <div className="flex gap-3">
                   {/* Avatar */}
@@ -171,7 +171,7 @@ export function DiscordChat({
 
             {/* Loading indicator */}
             {isLoading && (
-              <div className="group hover:bg-[#1e1e1e] rounded-lg px-4 py-3 mb-3 transition-colors bg-[#2a2a2a]">
+              <div className="group hover:bg-[#1e1e1e] rounded-lg px-2 md:px-4 py-2 md:py-3 mb-2 md:mb-3 transition-colors bg-[#2a2a2a]">
                 <div className="flex gap-3">
                   <div className="flex-shrink-0">
                     <div
@@ -206,24 +206,25 @@ export function DiscordChat({
       </div>
 
       {/* Input area */}
-      <div className="px-4 pb-4 bg-[#1e1e1e] border-t border-[#333333]">
+      <div className="px-2 md:px-4 pb-2 md:pb-4 pt-2 bg-[#1e1e1e] border-t border-[#333333]">
         <form onSubmit={handleSubmit} className="relative">
-          <div className="bg-[#2a2a2a] rounded-lg px-4 py-3 flex items-center gap-3 border border-[#333333]">
+          <div className="bg-[#2a2a2a] rounded-lg px-3 md:px-4 py-2 md:py-3 flex items-center gap-2 md:gap-3 border border-[#333333]">
             <div className="flex-1">
               <input
                 value={input}
                 onChange={handleInputChange}
-                placeholder={`Message #ai-chat`}
-                className="w-full bg-transparent text-[#e0e0e0] placeholder-[#9e9e9e] text-base outline-none resize-none"
+                placeholder={`Message #burpla`}
+                className="w-full bg-transparent text-[#e0e0e0] placeholder-[#9e9e9e] text-sm md:text-base outline-none resize-none"
                 disabled={isLoading}
               />
             </div>
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-2 text-[#9e9e9e] hover:text-[#9c27b0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 md:p-2 text-[#9e9e9e] hover:text-[#9c27b0] disabled:opacity-50 disabled:cursor-not-allowed transition-colors touch-manipulation"
+              aria-label="Send message"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-5 h-5 md:w-5 md:h-5" />
             </button>
           </div>
         </form>

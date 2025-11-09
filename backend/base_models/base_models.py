@@ -61,6 +61,7 @@ class CreateMarkersRequest(BaseModel):
 
 class AuthenticationRequest(BaseModel):
     gmail: str  = Field(default="williamhuybui@gmail.com")
+    name: Optional[str] = None
 
 class UserInfo(BaseModel):
     user_id: str = Field(default="user_001")
@@ -73,3 +74,8 @@ class UpdateSessionRequest(BaseModel):
     session_id: str = Body(default="session_003")
     session_name: Optional[str] = Body(default = "New Session Name")
     member_id_list: Optional[list[str]] = Body(default=["user_001", "user_002"])
+
+class JoinSessionRequest(BaseModel):
+    """Request to join an existing session"""
+    session_id: str = Field(..., example="session_003")
+    user_id: str = Field(..., example="user_001")

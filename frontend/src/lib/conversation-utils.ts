@@ -2,13 +2,141 @@ import type { InteractiveCardConfig } from "@/components/ai-elements/interactive
 import { getApiUrl } from "@/lib/api-config";
 
 /**
+ * Extract JSON object from string that might have extra text before/after
+ * Handles strings containing braces by tracking string boundaries
+ */
+function extractJsonFromString(str: string): string | null {
+  // First, try to find a complete JSON object by matching braces
+  // We need to track if we're inside a string to ignore braces in strings
+  let braceCount = 0;
+  let startIndex = -1;
+  let endIndex = -1;
+  let inString = false;
+  let escapeNext = false;
+  let stringChar: string | null = null; // Track which quote character started the string
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+
+    // Handle escape sequences
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escapeNext = true;
+      continue;
+    }
+
+    // Track string boundaries
+    if ((char === '"' || char === "'") && !escapeNext) {
+      if (!inString) {
+        inString = true;
+        stringChar = char;
+      } else if (char === stringChar) {
+        inString = false;
+        stringChar = null;
+      }
+      continue;
+    }
+
+    // Only process braces if we're not inside a string
+    if (!inString) {
+      if (char === "{") {
+        if (startIndex === -1) {
+          startIndex = i;
+        }
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+        if (braceCount === 0 && startIndex !== -1) {
+          endIndex = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (startIndex !== -1 && endIndex !== -1) {
+    return str.substring(startIndex, endIndex + 1);
+  }
+
+  // If no complete object found, try to find JSON array
+  if (str.trim().startsWith("[")) {
+    let bracketCount = 0;
+    startIndex = -1;
+    endIndex = -1;
+    inString = false;
+    escapeNext = false;
+    stringChar = null;
+
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+
+      // Handle escape sequences
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escapeNext = true;
+        continue;
+      }
+
+      // Track string boundaries
+      if ((char === '"' || char === "'") && !escapeNext) {
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = null;
+        }
+        continue;
+      }
+
+      // Only process brackets if we're not inside a string
+      if (!inString) {
+        if (char === "[") {
+          if (startIndex === -1) {
+            startIndex = i;
+          }
+          bracketCount++;
+        } else if (char === "]") {
+          bracketCount--;
+          if (bracketCount === 0 && startIndex !== -1) {
+            endIndex = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (startIndex !== -1 && endIndex !== -1) {
+      return str.substring(startIndex, endIndex + 1);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Parse a Python dict string to JavaScript object
  * Handles Python dict syntax including None, True, False, and mixed quotes
  */
 function parsePythonDict(str: string): any {
   try {
+    // Step 0: Try to extract just the JSON part if there's extra text
+    let jsonStr = extractJsonFromString(str);
+    if (!jsonStr) {
+      // If extraction failed, use the original string
+      jsonStr = str;
+    }
+
     // Step 1: Normalize Python boolean/null values to JavaScript
-    let normalized = str
+    let normalized = jsonStr
       .replace(/None/g, "null")
       .replace(/True/g, "true")
       .replace(/False/g, "false");
@@ -16,15 +144,19 @@ function parsePythonDict(str: string): any {
     // Step 2: Use a smarter approach - protect double-quoted strings first
     // Python uses double quotes for strings containing apostrophes (like "BJ's")
     // We need to protect these before converting single quotes
-    const protectedStrings: Array<{ placeholder: string; original: string }> = [];
+    const protectedStrings: Array<{ placeholder: string; original: string }> =
+      [];
     let placeholderIndex = 0;
 
     // Extract and replace double-quoted strings (handling escaped quotes)
-    normalized = normalized.replace(/"((?:[^"\\]|\\.)*)"/g, (match, content) => {
-      const placeholder = `___PROTECTED_STR_${placeholderIndex++}___`;
-      protectedStrings.push({ placeholder, original: match });
-      return placeholder;
-    });
+    normalized = normalized.replace(
+      /"((?:[^"\\]|\\.)*)"/g,
+      (match, content) => {
+        const placeholder = `___PROTECTED_STR_${placeholderIndex++}___`;
+        protectedStrings.push({ placeholder, original: match });
+        return placeholder;
+      }
+    );
 
     // Step 3: Now replace single quotes with double quotes (safe since double-quoted strings are protected)
     normalized = normalized.replace(/'/g, '"');
@@ -34,11 +166,22 @@ function parsePythonDict(str: string): any {
       normalized = normalized.replace(placeholder, original);
     });
 
-    // Step 6: Try JSON parsing first (most reliable and safe)
+    // Step 5: Try JSON parsing first (most reliable and safe)
     try {
       const parsed = JSON.parse(normalized);
       return parsed;
     } catch (jsonError) {
+      // Step 6: If JSON parsing fails, try to extract JSON again from normalized string
+      const extractedNormalized = extractJsonFromString(normalized);
+      if (extractedNormalized && extractedNormalized !== normalized) {
+        try {
+          const parsed = JSON.parse(extractedNormalized);
+          return parsed;
+        } catch (e) {
+          // Continue to fallback methods
+        }
+      }
+
       // Step 7: If JSON parsing fails, try Function constructor as fallback
       // Note: Input is from our own backend, so this is safe
       try {
@@ -49,7 +192,7 @@ function parsePythonDict(str: string): any {
         // Last resort: try with original Python syntax using Function constructor
         // (JavaScript can sometimes handle Python-like syntax)
         try {
-          const originalNormalized = str
+          const originalNormalized = jsonStr
             .replace(/None/g, "null")
             .replace(/True/g, "true")
             .replace(/False/g, "false");
@@ -58,9 +201,18 @@ function parsePythonDict(str: string): any {
           return result;
         } catch (finalError) {
           console.error("Failed to parse Python dict with all methods:", {
-            jsonError: jsonError instanceof Error ? jsonError.message : String(jsonError),
-            funcError: funcError instanceof Error ? funcError.message : String(funcError),
-            finalError: finalError instanceof Error ? finalError.message : String(finalError),
+            jsonError:
+              jsonError instanceof Error
+                ? jsonError.message
+                : String(jsonError),
+            funcError:
+              funcError instanceof Error
+                ? funcError.message
+                : String(funcError),
+            finalError:
+              finalError instanceof Error
+                ? finalError.message
+                : String(finalError),
             sample: str.substring(0, 500),
             normalized: normalized.substring(0, 500),
           });
@@ -95,15 +247,23 @@ function convertRecommendationCard(
     // Convert price level string to number if possible
     let priceLevel: number | undefined;
     if (opt.priceLevel && opt.priceLevel !== "N/A") {
-      // Map price level strings to numbers
-      const priceLevelMap: Record<string, number> = {
-        PRICE_LEVEL_FREE: 0,
-        PRICE_LEVEL_INEXPENSIVE: 1,
-        PRICE_LEVEL_MODERATE: 2,
-        PRICE_LEVEL_EXPENSIVE: 3,
-        PRICE_LEVEL_VERY_EXPENSIVE: 4,
-      };
-      priceLevel = priceLevelMap[opt.priceLevel] ?? undefined;
+      // Handle dollar sign format ($, $$, $$$, $$$$)
+      if (
+        typeof opt.priceLevel === "string" &&
+        opt.priceLevel.startsWith("$")
+      ) {
+        priceLevel = opt.priceLevel.length; // "$" = 1, "$$" = 2, etc.
+      } else {
+        // Map price level strings to numbers
+        const priceLevelMap: Record<string, number> = {
+          PRICE_LEVEL_FREE: 0,
+          PRICE_LEVEL_INEXPENSIVE: 1,
+          PRICE_LEVEL_MODERATE: 2,
+          PRICE_LEVEL_EXPENSIVE: 3,
+          PRICE_LEVEL_VERY_EXPENSIVE: 4,
+        };
+        priceLevel = priceLevelMap[opt.priceLevel] ?? undefined;
+      }
     }
 
     // Convert rating string to number
@@ -188,35 +348,117 @@ function convertVotingCard(data: any): InteractiveCardConfig | undefined {
  * Returns both the cleaned message content and cardConfig if a card is found
  */
 export function parseMessageForCard(
-  messageContent: string,
+  messageContent: string | any,
   userLocation?: { lat: number; lng: number } | null
 ): { content: string; cardConfig?: InteractiveCardConfig } {
-  let content = messageContent || "";
+  let content = "";
   let cardConfig: InteractiveCardConfig | undefined = undefined;
 
-  // Try to parse the message as a Python dict string
-  // Check if message looks like a Python dict (starts with { and contains 'type')
-  if (
-    content.trim().startsWith("{") &&
-    (content.includes("'type'") || content.includes('"type"'))
-  ) {
-    const parsedData = parsePythonDict(content);
-    if (parsedData) {
-      // Check for recommendation card
-      if (parsedData.type === "recommendation_card") {
+  // If messageContent is already an object, try to use it directly
+  let parsedData: any = null;
+
+  if (typeof messageContent === "object" && messageContent !== null) {
+    // Already an object, use it directly
+    parsedData = messageContent;
+    // Set content to empty string since we'll replace it with a friendly message
+    content = "";
+  } else if (typeof messageContent === "string") {
+    // Store original content
+    content = messageContent || "";
+
+    // Trim whitespace but preserve the structure
+    const trimmedContent = content.trim();
+
+    // Try to parse as JSON first (most common case)
+    if (
+      trimmedContent.startsWith("{") ||
+      trimmedContent.startsWith("[") ||
+      content.includes('"type"') ||
+      content.includes("'type'")
+    ) {
+      try {
+        // First, try direct JSON parsing
+        parsedData = JSON.parse(content);
+      } catch (jsonError) {
+        // If JSON parsing fails, try with trimmed content
+        try {
+          parsedData = JSON.parse(trimmedContent);
+        } catch (trimmedError) {
+          // If trimmed parsing also fails, try extracting JSON from the string
+          const extractedJson = extractJsonFromString(content);
+          if (extractedJson && extractedJson !== content) {
+            try {
+              parsedData = JSON.parse(extractedJson);
+            } catch (e) {
+              // If extracted JSON still fails, try Python dict parsing
+              parsedData = parsePythonDict(content);
+            }
+          } else {
+            // If no JSON found, try Python dict parsing
+            parsedData = parsePythonDict(content);
+          }
+        }
+      }
+    }
+  } else {
+    // Fallback: convert to string
+    content = String(messageContent || "");
+  }
+
+  // Process parsed data
+  if (parsedData) {
+    // Check if parsedData is a string (might be double-encoded JSON)
+    if (typeof parsedData === "string") {
+      try {
+        // Try parsing again in case it was double-encoded
+        parsedData = JSON.parse(parsedData);
+      } catch (e) {
+        // If it's not valid JSON, try Python dict parsing
+        parsedData = parsePythonDict(parsedData);
+      }
+    }
+
+    // Check for recommendation card
+    if (
+      parsedData &&
+      typeof parsedData === "object" &&
+      parsedData.type === "recommendation_card"
+    ) {
+      // Validate that options exists and is an array
+      if (!Array.isArray(parsedData.options)) {
+        console.warn(
+          "Recommendation card options is not an array:",
+          parsedData
+        );
+      } else {
         cardConfig = convertRecommendationCard(parsedData, userLocation);
         if (cardConfig) {
           // Set a user-friendly message content when we have a card
           content = "Here are some restaurant recommendations:";
+        } else {
+          // Log warning if card conversion failed
+          console.warn("Failed to convert recommendation card:", {
+            type: parsedData.type,
+            optionsCount: parsedData.options?.length,
+            hasOptions: !!parsedData.options,
+            sample: JSON.stringify(parsedData).substring(0, 200),
+          });
         }
       }
-      // Check for voting card
-      else if (parsedData.type === "vote_card") {
-        cardConfig = convertVotingCard(parsedData);
-        if (cardConfig) {
-          // Set a user-friendly message content when we have a voting card
-          content = "Vote for your favorite restaurant:";
-        }
+    }
+    // Check for voting card
+    else if (
+      parsedData &&
+      typeof parsedData === "object" &&
+      parsedData.type === "vote_card"
+    ) {
+      cardConfig = convertVotingCard(parsedData);
+      if (cardConfig) {
+        // Set a user-friendly message content when we have a voting card
+        content = "Vote for your favorite restaurant:";
+      } else {
+        // Log warning if card conversion failed
+        console.warn("Failed to convert vote card:", parsedData);
       }
     }
   }
@@ -298,26 +540,34 @@ export function convertConvoMessageToGroupChatMessage(
     }
 
     case "vote_card": {
-      content = convoMsg.content.text || convoMsg.content.title || "Vote for your favorite option:";
+      content =
+        convoMsg.content.text ||
+        convoMsg.content.title ||
+        "Vote for your favorite option:";
 
-      const voteOptions = (convoMsg.content.vote_options || []).map((opt, idx) => ({
-        id: opt.restaurant_id || `option-${idx}`,
-        restaurant_id: opt.restaurant_id || `option-${idx}`,
-        restaurant_name: opt.restaurant_name || `Option ${idx + 1}`,
-        name: opt.restaurant_name || `Option ${idx + 1}`,
-        description: opt.description || "",
-        image: opt.image || "",
-        photoUri: opt.image || "",
-        review: opt.review || "",
-        number_of_vote: opt.number_of_vote || 0,
-        votes: opt.number_of_vote || 0,
-        map: opt.map || "",
-        hyperlink: opt.map || "",
-        googleMapsUri: opt.map || "",
-        vote_user_id_list: opt.vote_user_id_list || [], // Include vote_user_id_list to track who voted
-      }));
+      const voteOptions = (convoMsg.content.vote_options || []).map(
+        (opt, idx) => ({
+          id: opt.restaurant_id || `option-${idx}`,
+          restaurant_id: opt.restaurant_id || `option-${idx}`,
+          restaurant_name: opt.restaurant_name || `Option ${idx + 1}`,
+          name: opt.restaurant_name || `Option ${idx + 1}`,
+          description: opt.description || "",
+          image: opt.image || "",
+          photoUri: opt.image || "",
+          review: opt.review || "",
+          number_of_vote: opt.number_of_vote || 0,
+          votes: opt.number_of_vote || 0,
+          map: opt.map || "",
+          hyperlink: opt.map || "",
+          googleMapsUri: opt.map || "",
+          vote_user_id_list: opt.vote_user_id_list || [], // Include vote_user_id_list to track who voted
+        })
+      );
 
-      const totalVotes = voteOptions.reduce((sum, opt) => sum + (opt.number_of_vote || 0), 0);
+      const totalVotes = voteOptions.reduce(
+        (sum, opt) => sum + (opt.number_of_vote || 0),
+        0
+      );
 
       cardConfig = {
         type: "voting",
@@ -348,10 +598,14 @@ export function convertConvoMessageToGroupChatMessage(
       }
 
       const description = [
-        convoMsg.content.selected_restaurant_name && `Restaurant: ${convoMsg.content.selected_restaurant_name}`,
-        convoMsg.content.time_selection && `Time: ${convoMsg.content.time_selection}`,
-        convoMsg.content.date_selection && `Date: ${convoMsg.content.date_selection}`,
-        convoMsg.content.list_of_people && `Attendees: ${convoMsg.content.list_of_people.join(", ")}`,
+        convoMsg.content.selected_restaurant_name &&
+          `Restaurant: ${convoMsg.content.selected_restaurant_name}`,
+        convoMsg.content.time_selection &&
+          `Time: ${convoMsg.content.time_selection}`,
+        convoMsg.content.date_selection &&
+          `Date: ${convoMsg.content.date_selection}`,
+        convoMsg.content.list_of_people &&
+          `Attendees: ${convoMsg.content.list_of_people.join(", ")}`,
         convoMsg.content.additional_notes,
       ]
         .filter(Boolean)
@@ -376,7 +630,10 @@ export function convertConvoMessageToGroupChatMessage(
     }
 
     case "end_card": {
-      content = convoMsg.content.title || convoMsg.content.message || "Reminder confirmed!";
+      content =
+        convoMsg.content.title ||
+        convoMsg.content.message ||
+        "Reminder confirmed!";
 
       // Parse see_you_at if available
       if (convoMsg.content.see_you_at) {
@@ -393,8 +650,10 @@ export function convertConvoMessageToGroupChatMessage(
 
         const description = [
           `Restaurant: ${seeYouAt.restaurant_name || "TBD"}`,
-          seeYouAt.direction?.address_text && `Address: ${seeYouAt.direction.address_text}`,
-          seeYouAt.datetime && `Date & Time: ${new Date(seeYouAt.datetime).toLocaleString()}`,
+          seeYouAt.direction?.address_text &&
+            `Address: ${seeYouAt.direction.address_text}`,
+          seeYouAt.datetime &&
+            `Date & Time: ${new Date(seeYouAt.datetime).toLocaleString()}`,
         ]
           .filter(Boolean)
           .join("\n");
@@ -404,12 +663,13 @@ export function convertConvoMessageToGroupChatMessage(
           config: {
             title: convoMsg.content.title || "Reminder Set! 🔔",
             description: description || convoMsg.content.message || "",
-            location: seeYouAt.restaurant_name && seeYouAt.direction
-              ? {
-                  name: seeYouAt.restaurant_name,
-                  address: seeYouAt.direction.address_text || "",
-                }
-              : undefined,
+            location:
+              seeYouAt.restaurant_name && seeYouAt.direction
+                ? {
+                    name: seeYouAt.restaurant_name,
+                    address: seeYouAt.direction.address_text || "",
+                  }
+                : undefined,
             time: reminderTime,
             priority: "high" as const,
           },
@@ -455,7 +715,10 @@ export function convertConvoMessagesToGroupChatMessages(
 export function extractUsersFromConvoMessages(
   convoMessages: ConvoMessage[]
 ): Array<{ id: string; name: string; joinedAt: number }> {
-  const userMap = new Map<string, { id: string; name: string; joinedAt: number }>();
+  const userMap = new Map<
+    string,
+    { id: string; name: string; joinedAt: number }
+  >();
   const baseTime = Date.now() - convoMessages.length * 60000;
 
   convoMessages.forEach((msg, index) => {
@@ -474,30 +737,37 @@ export function extractUsersFromConvoMessages(
 }
 
 /**
- * Load messages from backend /get_session endpoint
+ * Load messages from backend /session/get endpoint
  * Converts backend format to frontend format and parses card information
  */
 export async function loadSessionMessagesFromBackend(
   sessionId: string,
   userLocation?: { lat: number; lng: number } | null
-): Promise<Array<{
-  id: string;
-  userId: string;
-  userName: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: number;
-  cardConfig?: InteractiveCardConfig;
-}>> {
+): Promise<
+  Array<{
+    id: string;
+    userId: string;
+    userName: string;
+    content: string;
+    role: "user" | "assistant";
+    timestamp: number;
+    cardConfig?: InteractiveCardConfig;
+  }>
+> {
   try {
-    const backendUrl = getApiUrl(`/get_session?session_id=${encodeURIComponent(sessionId)}`);
+    const backendUrl = getApiUrl(
+      `/session/get?session_id=${encodeURIComponent(sessionId)}`
+    );
     const response = await fetch(backendUrl, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
 
     if (!response.ok) {
-      console.warn(`Failed to load session ${sessionId} from backend:`, response.status);
+      console.warn(
+        `Failed to load session ${sessionId} from backend:`,
+        response.status
+      );
       return [];
     }
 
@@ -509,7 +779,9 @@ export async function loadSessionMessagesFromBackend(
     // Fetch user names for the session
     let userNamesMap = new Map<string, string>();
     try {
-      const usersUrl = getApiUrl(`/get_session_users_info?session_id=${encodeURIComponent(sessionId)}`);
+      const usersUrl = getApiUrl(
+        `/session/get_users_info?session_id=${encodeURIComponent(sessionId)}`
+      );
       const usersResponse = await fetch(usersUrl, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -526,7 +798,10 @@ export async function loadSessionMessagesFromBackend(
         }
       }
     } catch (error) {
-      console.warn("Failed to load user names for session, will use fallback:", error);
+      console.warn(
+        "Failed to load user names for session, will use fallback:",
+        error
+      );
     }
 
     // Convert backend format to frontend format
@@ -538,17 +813,27 @@ export async function loadSessionMessagesFromBackend(
         ? new Date(msg.timestamp).getTime()
         : Date.now();
 
-      // Get user name from map, or fallback to a formatted version of user_id
+      // Get user name from map, always prioritize name over user_id
       let userName: string;
       if (isBot) {
         userName = "Burpla";
       } else {
         const userId = msg.user_id || "unknown";
         userName = userNamesMap.get(userId) || userId;
-        // If still using userId, try to format it nicely (e.g., "user_001" -> "User 001")
-        if (userName === userId && userId.startsWith("user_")) {
-          const numPart = userId.replace("user_", "");
-          userName = `User ${numPart}`;
+        // If name not found in map, format userId nicely instead of using raw userId
+        if (!userName || userName === userId) {
+          if (userId.startsWith("user_")) {
+            // Format user_xxx to "User xxx" or extract meaningful part
+            const numPart = userId.replace("user_", "");
+            // If it's a hex string (like user_49090983), just show "User" with first few chars
+            if (/^[a-f0-9]+$/i.test(numPart) && numPart.length > 6) {
+              userName = `User ${numPart.substring(0, 4)}...`;
+            } else {
+              userName = `User ${numPart}`;
+            }
+          } else {
+            userName = userId;
+          }
         }
       }
 
@@ -564,7 +849,9 @@ export async function loadSessionMessagesFromBackend(
       }
 
       return {
-        id: msg.message_id || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id:
+          msg.message_id ||
+          `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: msg.user_id || "unknown",
         userName,
         content,
@@ -574,8 +861,10 @@ export async function loadSessionMessagesFromBackend(
       };
     });
   } catch (error) {
-    console.error(`Error loading messages from backend for session ${sessionId}:`, error);
+    console.error(
+      `Error loading messages from backend for session ${sessionId}:`,
+      error
+    );
     return [];
   }
 }
-

@@ -23,7 +23,7 @@ async function loadMessagesFromBackend(
 ): Promise<SessionMessage[]> {
   try {
     const backendUrl = getApiUrl(
-      `/get_session?session_id=${encodeURIComponent(sessionId)}`
+      `/session/get?session_id=${encodeURIComponent(sessionId)}`
     );
     const response = await fetch(backendUrl, {
       method: "GET",
@@ -47,7 +47,7 @@ async function loadMessagesFromBackend(
     let userNamesMap = new Map<string, string>();
     try {
       const usersUrl = getApiUrl(
-        `/get_session_users_info?session_id=${encodeURIComponent(sessionId)}`
+        `/session/get_users_info?session_id=${encodeURIComponent(sessionId)}`
       );
       const usersResponse = await fetch(usersUrl, {
         method: "GET",
@@ -126,8 +126,8 @@ async function loadMessagesFromBackend(
 
 /**
  * Save message to backend database
- * Note: Backend requires valid user IDs (user_001, user_002, user_003)
- * For frontend-generated user IDs, we use a fallback user_id
+ * Uses the actual user_id from authentication (backend accepts any user_id format)
+ * Ensures session exists before saving message
  */
 async function saveMessageToBackend(
   sessionId: string,
@@ -136,24 +136,78 @@ async function saveMessageToBackend(
   content: string
 ): Promise<void> {
   try {
-    // Only save user messages to backend (bot messages are saved by the backend /sent endpoint)
+    // Only save user messages to backend (bot messages are saved by the backend /chat/sent endpoint)
     if (userId === "burpla" || userId === "ai" || userId === "bot") {
-      return; // Bot messages are handled by backend /sent endpoint
+      return; // Bot messages are handled by backend /chat/sent endpoint
     }
 
-    // Preserve the original userId - don't convert to user_001
-    // The backend should accept any user_id format
-    // If backend requires specific format, we'll handle it in the backend
-    const backendUserId = userId;
+    // First, ensure the user exists in the backend (required for saving messages)
+    try {
+      const userCheckUrl = getApiUrl(
+        `/user/get?user_id=${encodeURIComponent(userId)}`
+      );
+      const userCheckResponse = await fetch(userCheckUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
 
-    const backendUrl = getApiUrl("/sent");
+      if (userCheckResponse.status === 404) {
+        console.error(
+          `[saveMessageToBackend] User ${userId} not found in backend. Message cannot be saved.`
+        );
+        // Don't continue - the backend will reject this anyway
+        return;
+      }
+    } catch (userCheckError) {
+      console.warn(
+        `[saveMessageToBackend] Error checking user ${userId}:`,
+        userCheckError
+      );
+      // Continue anyway - try to save the message and let backend handle it
+    }
+
+    // Check if session exists in the backend - don't create it automatically
+    // Sessions must be created explicitly by the user with a name
+    try {
+      const sessionCheckUrl = getApiUrl(
+        `/session/get?session_id=${encodeURIComponent(sessionId)}`
+      );
+      const sessionCheckResponse = await fetch(sessionCheckUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      // If session doesn't exist (404), don't create it - return early
+      if (sessionCheckResponse.status === 404) {
+        console.warn(
+          `[saveMessageToBackend] Session ${sessionId} not found. Session must be created explicitly by the user.`
+        );
+        return; // Don't save message to non-existent session
+      }
+    } catch (sessionCheckError) {
+      console.warn(
+        `[saveMessageToBackend] Error checking session ${sessionId}:`,
+        sessionCheckError
+      );
+      // Don't continue - session must exist
+      return;
+    }
+
+    // Use the actual userId from authentication - backend now accepts any user_id format
+    const backendUrl = getApiUrl("/chat/sent");
+    console.log(`[saveMessageToBackend] Saving message to backend:`, {
+      sessionId,
+      userId,
+      messageId,
+      contentLength: content.length,
+    });
+
     const response = await fetch(backendUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_id: backendUserId,
+        user_id: userId, // Use the actual user_id from authentication
         message: content,
-        message_id: messageId,
         session_id: sessionId,
         is_to_agent: false, // Don't trigger AI response, just save the message
       }),
@@ -161,30 +215,25 @@ async function saveMessageToBackend(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      // If user not found error, try with default user_id
-      if (response.status === 404 && backendUserId !== "user_001") {
-        // Retry with default user_id
-        await fetch(backendUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_id: "user_001",
-            message: content,
-            message_id: messageId,
-            session_id: sessionId,
-            is_to_agent: false,
-          }),
-        });
-      } else {
-        console.warn(
-          `Backend save failed for session ${sessionId}:`,
-          errorData
-        );
-      }
+      const errorText = await response.text().catch(() => "");
+      console.error(
+        `[saveMessageToBackend] Backend save failed for session ${sessionId}:`,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          errorText,
+        }
+      );
+      // Don't throw - allow message to be saved in memory even if backend save fails
+    } else {
+      console.log(
+        `[saveMessageToBackend] Message saved successfully to backend for session ${sessionId}`
+      );
     }
   } catch (error) {
     console.error(
-      `Error saving message to backend for session ${sessionId}:`,
+      `[saveMessageToBackend] Error saving message to backend for session ${sessionId}:`,
       error
     );
     // Don't throw - allow message to be saved in memory even if backend save fails
@@ -271,26 +320,47 @@ export async function POST(req: NextRequest) {
     } = body;
 
     if (action === "create") {
-      const newSessionId = sessionId || generateId();
+      let newSessionId = sessionId || generateId();
 
       // Get user info from request body (userId and userName should be provided)
       const requestUserId = userId || generateId();
       const requestUserName = userName || "User";
 
+      // Require session name - don't auto-generate
+      if (!body.sessionName || !body.sessionName.trim()) {
+        return NextResponse.json(
+          { error: "Session name is required" },
+          { status: 400 }
+        );
+      }
+      const requestSessionName = body.sessionName.trim();
+
+      // Use the actual user_id from authentication - backend accepts any user_id format
       // Create session in backend database
       try {
-        const backendUrl = getApiUrl("/create_session");
-        await fetch(backendUrl, {
+        const backendUrl = getApiUrl("/session/create");
+        const createResponse = await fetch(backendUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            session_id: newSessionId,
-            session_name: `Session ${newSessionId.substring(0, 8)}`,
             owner_id: requestUserId,
-            user_id: requestUserId,
-            user_name: requestUserName,
+            session_name: requestSessionName,
+            user_id_list: [requestUserId],
           }),
         });
+
+        if (createResponse.ok) {
+          const createData = await createResponse.json();
+          // Use the session_id returned from backend if available
+          if (createData.session_id) {
+            newSessionId = createData.session_id;
+          }
+        } else {
+          console.warn(
+            "Failed to create session in backend:",
+            await createResponse.text()
+          );
+        }
       } catch (error) {
         console.error("Failed to create session in backend:", error);
         // Continue anyway - session will be created in memory
@@ -317,24 +387,40 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Join session in backend database (this will create it if it doesn't exist)
+      // First, join the session in the backend database
+      // This adds the user to the session's member_id_list
       try {
-        const backendUrl = getApiUrl("/create_session");
-        await fetch(backendUrl, {
+        const backendUrl = getApiUrl("/session/join");
+        const joinResponse = await fetch(backendUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             session_id: sessionId,
-            owner_id: userId, // Use current user as owner if creating new session
             user_id: userId,
-            user_name: userName,
           }),
         });
+
+        if (!joinResponse.ok) {
+          const errorData = await joinResponse.json().catch(() => ({}));
+          const errorMessage =
+            errorData.detail ||
+            errorData.error ||
+            "Failed to join session in backend";
+          console.error("Failed to join session in backend:", errorMessage);
+          return NextResponse.json(
+            { error: errorMessage },
+            { status: joinResponse.status }
+          );
+        }
       } catch (error) {
-        console.error("Failed to join session in backend:", error);
-        // Continue anyway - session will be created in memory
+        console.error("Error joining session in backend:", error);
+        return NextResponse.json(
+          { error: "Failed to join session. Please try again." },
+          { status: 500 }
+        );
       }
 
+      // Check if session exists in backend - don't create it automatically
       let session = sessions.get(sessionId);
       if (!session) {
         // Try to load from backend database first
@@ -361,13 +447,11 @@ export async function POST(req: NextRequest) {
             }
           });
         } else {
-          // Create new session if it doesn't exist in backend either
-          session = {
-            id: sessionId,
-            messages: [],
-            users: new Map<string, SessionUser>(),
-            createdAt: Date.now(),
-          };
+          // Session doesn't exist - return error instead of creating it
+          return NextResponse.json(
+            { error: "Session not found. Please create a session first." },
+            { status: 404 }
+          );
         }
 
         sessions.set(sessionId, session);
@@ -389,6 +473,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Use the actual user_id from authentication - backend accepts any user_id format
       let session = sessions.get(sessionId);
       if (!session) {
         // Try to load from backend database first
@@ -415,13 +500,11 @@ export async function POST(req: NextRequest) {
             }
           });
         } else {
-          // Create new session if it doesn't exist in backend either
-          session = {
-            id: sessionId,
-            messages: [],
-            users: new Map<string, SessionUser>(),
-            createdAt: Date.now(),
-          };
+          // Session doesn't exist in backend - return error instead of creating it
+          return NextResponse.json(
+            { error: "Session not found. Please create a session first." },
+            { status: 404 }
+          );
         }
 
         sessions.set(sessionId, session);
@@ -474,8 +557,12 @@ export async function POST(req: NextRequest) {
         session.messages.push(newMessage);
       }
 
-      // Save user messages to backend database (bot messages are saved by backend /sent endpoint)
+      // Save user messages to backend database (bot messages are saved by backend /chat/sent endpoint)
+      // Only save if not a bot message and if is_to_agent is false (to avoid duplicate saves)
+      // If the message mentions @burpla, it will be sent again with is_to_agent: true from the frontend
       if (!isBot) {
+        // Save message to backend (this will be called with is_to_agent: false)
+        // The frontend will call /chat/sent again with is_to_agent: true if @burpla is mentioned
         await saveMessageToBackend(sessionId, userId, finalMessageId, message);
       }
 

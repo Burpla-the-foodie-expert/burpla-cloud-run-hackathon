@@ -33,7 +33,7 @@ export function BotMessage({ group, groupIndex, sessionId, userId, onVoteUpdate 
   return (
     <div
       key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
-      className="group hover:bg-[#1e1e1e] rounded-lg px-4 py-3 mb-3 transition-colors bg-[#2a2a2a]"
+      className="group hover:bg-[#1e1e1e] rounded-lg px-2 md:px-4 py-2 md:py-3 mb-2 md:mb-3 transition-colors bg-[#2a2a2a]"
     >
       <div className="flex gap-3">
         {/* Avatar */}

@@ -67,6 +67,16 @@ class UserManager:
             """, (user_id,))
             return cursor.fetchone()
 
+    def get_user_by_gmail(self, gmail):
+        """Retrieves a user from the database by gmail."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                SELECT * FROM {self.table_name}
+                WHERE gmail = ?
+            """, (gmail,))
+            return cursor.fetchone()
+
     def delete_user(self, user_id):
         """Deletes a user from the database by user_id."""
         with sqlite3.connect(self.db_path) as conn:
@@ -102,12 +112,54 @@ class UserManager:
                 WHERE user_id = ?
             """, values)
 
-    def authentication(self, gmail):
-        """Authenticate user by gmail."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(f"SELECT COUNT(*) FROM {self.table_name} WHERE gmail = ?", (gmail,))
-            response = cursor.fetchone()
-            if response and response[0] > 0:
-                return True
-            return False
+    def authentication(self, gmail, name=None):
+        """Authenticate user by gmail. Creates user if they don't exist.
+        Updates name if provided and different from existing name.
+
+        Returns:
+            tuple: (is_authenticated: bool, user_id: str or None)
+        """
+        try:
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
+                cursor = conn.cursor()
+                # Check if user exists
+                cursor.execute(f"SELECT user_id, name FROM {self.table_name} WHERE gmail = ?", (gmail,))
+                existing_user = cursor.fetchone()
+
+                if existing_user:
+                    # User exists, check if name needs updating
+                    user_id = existing_user[0]
+                    existing_name = existing_user[1]
+
+                    # Update name if provided and different
+                    if name and name != existing_name:
+                        cursor.execute(f"""
+                            UPDATE {self.table_name}
+                            SET name = ?
+                            WHERE user_id = ?
+                        """, (name, user_id))
+                        conn.commit()
+
+                    return True, user_id
+
+                # User doesn't exist, create a new user
+                # Generate user_id based on email (use email prefix + hash for uniqueness)
+                user_id = f"user_{uuid.uuid4().hex[:8]}"
+
+                # Use provided name or derive from email
+                user_name = name if name else gmail.split("@")[0]
+
+                # Insert new user
+                cursor.execute(f"""
+                    INSERT INTO {self.table_name} (user_id, name, gmail, preferences, location)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, user_name, gmail, None, None))
+                conn.commit()
+
+                return True, user_id
+        except Exception as e:
+            import traceback
+            print(f"Error in authentication method: {e}")
+            print(traceback.format_exc())
+            # Return False on error so the endpoint can handle it
+            return False, None

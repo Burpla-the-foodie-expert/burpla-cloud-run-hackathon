@@ -11,11 +11,11 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * Usage:
  * - GET /api/health -> proxies to http://localhost:8000/health (unless /api/health/route.ts exists)
- * - POST /api/sent -> proxies to http://localhost:8000/sent (unless /api/sent/route.ts exists)
- * - GET /api/convo_init?user_id=user_001 -> proxies to http://localhost:8000/convo_init?user_id=user_001
- * - GET /api/get_user_info?user_id=user_001 -> proxies to http://localhost:8000/get_user_info?user_id=user_001
- * - POST /api/vote?session_id=... -> proxies to http://localhost:8000/vote?session_id=...
- * - POST /api/create_markers -> proxies to http://localhost:8000/create_markers
+ * - POST /api/chat/sent -> proxies to http://localhost:8000/chat/sent (unless /api/chat/sent/route.ts exists)
+ * - GET /api/session/get_all?user_id=user_001 -> proxies to http://localhost:8000/session/get_all?user_id=user_001
+ * - GET /api/user/get?user_id=user_001 -> proxies to http://localhost:8000/user/get?user_id=user_001
+ * - POST /api/chat/vote?session_id=... -> proxies to http://localhost:8000/chat/vote?session_id=...
+ * - POST /api/chat/create_markers -> proxies to http://localhost:8000/chat/create_markers
  * - etc.
  *
  * Backend URL is configured via NEXT_PUBLIC_BACKEND_URL environment variable
@@ -44,15 +44,23 @@ async function handleProxy(
     // Get query string from request URL
     const searchParams = request.nextUrl.searchParams;
     const queryString = searchParams.toString();
-    const fullBackendUrl = `${backendUrl}${backendPath}${queryString ? `?${queryString}` : ""}`;
+    const fullBackendUrl = `${backendUrl}${backendPath}${
+      queryString ? `?${queryString}` : ""
+    }`;
 
-    console.log(`[Proxy] ${request.method} ${request.nextUrl.pathname} -> ${fullBackendUrl}`);
+    console.log(
+      `[Proxy] ${request.method} ${request.nextUrl.pathname} -> ${fullBackendUrl}`
+    );
 
     // Get request body if present (for POST, PUT, PATCH)
     let body: BodyInit | undefined;
     const contentType = request.headers.get("content-type") || "";
 
-    if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS") {
+    if (
+      request.method !== "GET" &&
+      request.method !== "HEAD" &&
+      request.method !== "OPTIONS"
+    ) {
       // Read body based on content type
       if (contentType.includes("application/json")) {
         try {
@@ -88,9 +96,7 @@ async function handleProxy(
     request.headers.forEach((value, key) => {
       const lowerKey = key.toLowerCase();
       // Skip headers that shouldn't be forwarded
-      if (
-        !["host", "connection", "content-length"].includes(lowerKey)
-      ) {
+      if (!["host", "connection", "content-length"].includes(lowerKey)) {
         headers.set(key, value);
       }
     });
@@ -117,7 +123,9 @@ async function handleProxy(
     response.headers.forEach((value, key) => {
       const lowerKey = key.toLowerCase();
       if (
-        !["content-encoding", "transfer-encoding", "connection"].includes(lowerKey)
+        !["content-encoding", "transfer-encoding", "connection"].includes(
+          lowerKey
+        )
       ) {
         proxyResponse.headers.set(key, value);
       }
@@ -154,4 +162,3 @@ export const PATCH = handleProxy;
 export const DELETE = handleProxy;
 export const HEAD = handleProxy;
 export const OPTIONS = handleProxy;
-
