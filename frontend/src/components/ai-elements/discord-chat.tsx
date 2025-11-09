@@ -1,8 +1,9 @@
 "use client";
 
-import { useChat } from "ai/react";
+import { useState, useCallback } from "react";
 import { Bot, Send, Hash } from "lucide-react";
 import { format } from "date-fns";
+import { getApiUrl } from "@/lib/api-config";
 
 function getAvatarColor(name: string) {
   const colors = [
@@ -21,6 +22,13 @@ function getAvatarColor(name: string) {
   return colors[index];
 }
 
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt?: Date;
+}
+
 interface MessageGroup {
   role: "user" | "assistant";
   messages: Array<{ id: string; content: string; createdAt?: Date }>;
@@ -32,25 +40,94 @@ interface MessageGroup {
 interface DiscordChatProps {
   userLocation?: { lat: number; lng: number } | null;
   userName?: string;
+  userId: string;
+  sessionId: string;
 }
 
 export function DiscordChat({
   userLocation,
   userName = "User",
+  userId,
+  sessionId,
 }: DiscordChatProps) {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat({
-      api: "/api/chat",
-      body: {
-        ...(userLocation && {
-          location: {
-            latitude: userLocation.lat,
-            longitude: userLocation.lng,
-          },
-        }),
-        ...(userName && { userName }),
-      },
-    });
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+  };
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!input.trim() || isLoading) return;
+
+      const messageContent = input.trim();
+      setInput("");
+      setIsLoading(true);
+
+      const messageId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(2, 9)}`;
+
+      // Add user message optimistically
+      const userMessage: Message = {
+        id: messageId,
+        role: "user",
+        content: messageContent,
+        createdAt: new Date(),
+      };
+      setMessages((prev) => [...prev, userMessage]);
+
+      try {
+        // Send message to /chat/sent endpoint
+        const backendUrl = getApiUrl("/chat/sent");
+        const response = await fetch(backendUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: userId,
+            message: messageContent,
+            session_id: sessionId,
+            is_to_agent: true,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Add bot response
+          const botMessage: Message = {
+            id: data.message_id || `bot-${Date.now()}`,
+            role: "assistant",
+            content: data.message || "No response",
+            createdAt: new Date(),
+          };
+          setMessages((prev) => [...prev, botMessage]);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.detail || errorData.error || "Failed to get response"
+          );
+        }
+      } catch (error: any) {
+        console.error("Failed to send message:", error);
+        // Add error message
+        const errorMessage: Message = {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: `Error: ${
+            error.message || "Failed to send message. Please try again."
+          }`,
+          createdAt: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [input, isLoading, userId, sessionId]
+  );
 
   // Group consecutive messages from the same author
   const groupedMessages: MessageGroup[] = [];

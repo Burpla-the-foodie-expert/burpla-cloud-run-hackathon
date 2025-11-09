@@ -1,12 +1,97 @@
 'use client'
 
-import { useChat } from 'ai/react'
+import { useState, useCallback } from 'react'
 import { Bot, User } from 'lucide-react'
+import { getApiUrl } from '@/lib/api-config'
 
-export function Chat() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/chat',
-  })
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
+
+interface ChatProps {
+  userId: string
+  sessionId: string
+  userName?: string
+}
+
+export function Chat({ userId, sessionId, userName = 'User' }: ChatProps) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value)
+  }
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!input.trim() || isLoading) return
+
+      const messageContent = input.trim()
+      setInput('')
+      setIsLoading(true)
+
+      const messageId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(2, 9)}`
+
+      // Add user message optimistically
+      const userMessage: Message = {
+        id: messageId,
+        role: 'user',
+        content: messageContent,
+      }
+      setMessages((prev) => [...prev, userMessage])
+
+      try {
+        // Send message to /chat/sent endpoint
+        const backendUrl = getApiUrl('/chat/sent')
+        const response = await fetch(backendUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            message: messageContent,
+            session_id: sessionId,
+            is_to_agent: true,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          // Add bot response
+          const botMessage: Message = {
+            id: data.message_id || `bot-${Date.now()}`,
+            role: 'assistant',
+            content: data.message || 'No response',
+          }
+          setMessages((prev) => [...prev, botMessage])
+        } else {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(
+            errorData.detail || errorData.error || 'Failed to get response'
+          )
+        }
+      } catch (error: any) {
+        console.error('Failed to send message:', error)
+        // Add error message
+        const errorMessage: Message = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: `Error: ${
+            error.message || 'Failed to send message. Please try again.'
+          }`,
+        }
+        setMessages((prev) => [...prev, errorMessage])
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [input, isLoading, userId, sessionId]
+  )
 
   return (
     <div className="flex flex-col w-full max-w-2xl mx-auto">

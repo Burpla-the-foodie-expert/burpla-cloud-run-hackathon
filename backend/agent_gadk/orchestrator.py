@@ -8,12 +8,13 @@ from agent_gadk.sub_agents.recommendation_card import pipeline_recommendation_ag
 from config import GEMINI_PRO, GEMINI_FLASH
 from agent_gadk.tools import distance_matrix, google_places_text_search
 from google.adk.sessions import InMemorySessionService
-import asyncio, re, json, uuid, traceback
-import asyncio, re, json, uuid, traceback
+import asyncio, traceback
 
 warnings.filterwarnings("ignore")
 
 load_dotenv(override=True)
+
+logger = logging.getLogger(__name__)
 gen_cfg = types.GenerateContentConfig(
     temperature=0.1,
 )
@@ -23,10 +24,10 @@ root_agent = Agent(
     model=GEMINI_FLASH,
     description="Your name is Burpla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
     instruction="""
-        Your name is Burpla. You are the main Food Recommendation Agent coordinating a team. 
+        Your name is Burpla. You are the main Food Recommendation Agent coordinating a team.
         Your primary responsibility is to provide food place recommendations, distance information, and generate vote requests, and answer other general questions.
-        
-        IMPORTANT: 
+
+        IMPORTANT:
         * If you see the note: THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER, don't respond to the user at all. But remember the conversation for future context.
         * Otherwise, follow the instructions below carefully.
 
@@ -93,20 +94,57 @@ async def call_agent_async(
     content = types.Content(role="user", parts=[types.Part(text=query)])
     final_response_text = "Agent did not produce a final response."
 
-    async for event in runner.run_async(
-        user_id=user_id, session_id=session_id, new_message=content
-    ):
-        if event.is_final_response():
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if hasattr(part, "text") and part.text:
-                        final_response_text = part.text.strip()
-                        break
-            elif event.actions and event.actions.escalate:
-                final_response_text = (
-                    f"Agent escalated: {event.error_message or 'No specific message.'}"
+    try:
+        async for event in runner.run_async(
+            user_id=user_id, session_id=session_id, new_message=content
+        ):
+            if event.is_final_response():
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if hasattr(part, "text") and part.text:
+                            final_response_text = part.text.strip()
+                            break
+                elif event.actions and event.actions.escalate:
+                    final_response_text = (
+                        f"Agent escalated: {event.error_message or 'No specific message.'}"
+                    )
+                break
+    except ValueError as e:
+        error_msg = str(e)
+        if "Session not found" in error_msg:
+            logger.error(f"❌ Session not found: {session_id}. Error: {error_msg}")
+            # Try to recreate the session and retry once
+            try:
+                await session_service.create_session(
+                    app_name=runner.app_name, user_id=user_id, session_id=session_id
                 )
-            break
+                logger.info(f"🔄 Recreated session {session_id}, retrying...")
+                # Retry the call
+                async for event in runner.run_async(
+                    user_id=user_id, session_id=session_id, new_message=content
+                ):
+                    if event.is_final_response():
+                        if event.content and event.content.parts:
+                            for part in event.content.parts:
+                                if hasattr(part, "text") and part.text:
+                                    final_response_text = part.text.strip()
+                                    break
+                        elif event.actions and event.actions.escalate:
+                            final_response_text = (
+                                f"Agent escalated: {event.error_message or 'No specific message.'}"
+                            )
+                        break
+            except Exception as retry_error:
+                logger.error(f"❌ Failed to recreate session {session_id}: {retry_error}")
+                raise ValueError(f"Session {session_id} not found and could not be recreated: {retry_error}")
+        else:
+            # Re-raise if it's a different ValueError
+            raise
+    except Exception as e:
+        logger.error(f"❌ Unexpected error in call_agent_async for session {session_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
 
     return final_response_text
 
@@ -128,11 +166,26 @@ async def run_conversation(
     session_id: str = "something",
 ):
     session_key = (app_name, session_id)
+    # Always try to ensure session exists, even if we think we created it before
+    # (in case of server restart or service reset)
     if session_key not in created_sessions:
-        await session_service.create_session(
-            app_name=app_name, user_id=user_id, session_id=session_id
-        )
-        created_sessions.add(session_key)
+        try:
+            await session_service.create_session(
+                app_name=app_name, user_id=user_id, session_id=session_id
+            )
+            created_sessions.add(session_key)
+            logger.info(f"✅ Created session: {session_id} for user: {user_id}")
+        except Exception as e:
+            error_msg = str(e).lower()
+            # If session already exists, that's fine - continue
+            if "already exists" in error_msg or "duplicate" in error_msg:
+                logger.info(f"ℹ️ Session {session_id} already exists, continuing...")
+                created_sessions.add(session_key)
+            else:
+                # For other errors, log but still try to continue
+                # The actual error will surface when we try to use the session
+                logger.warning(f"⚠️ Session creation warning for {session_id}: {e}")
+                created_sessions.add(session_key)
 
     runner_agent_team = Runner(
         agent=root_agent, app_name=app_name, session_service=session_service

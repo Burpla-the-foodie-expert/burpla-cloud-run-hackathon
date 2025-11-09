@@ -158,7 +158,7 @@ export default function Home() {
         });
         setIsInitialized(true);
       }
-      
+
       initializeUserAndSession();
     }
   }, []);
@@ -305,11 +305,17 @@ export default function Home() {
                 onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
                 onToggleUsersPanel={() => setUsersPanelOpen(!usersPanelOpen)}
               />
-            ) : (
+            ) : userId ? (
               <DiscordChat
                 userLocation={userData?.location || null}
                 userName={userData?.name || "User"}
+                userId={userId}
+                sessionId={sessionId || "default"}
               />
+            ) : (
+              <div className="flex items-center justify-center h-full text-[#9e9e9e]">
+                Please initialize your account first
+              </div>
             )}
           </div>
 
