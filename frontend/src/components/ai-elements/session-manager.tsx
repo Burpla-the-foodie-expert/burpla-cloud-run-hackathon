@@ -46,7 +46,7 @@ export function SessionManager({
   } = useSessions(effectiveUserId);
 
   // Use session management hook
-  const { createSession, joinSession, isCreating } = useSessionManagement({
+  const { createSession, joinSession } = useSessionManagement({
     onSessionChange,
     userId,
     userName,
@@ -115,7 +115,11 @@ export function SessionManager({
   useEffect(() => {
     if (sessionId) {
       setShowModal(false);
-    } else if (isSessionsFetched && !isLoadingSessions && sessions.length === 0) {
+    } else if (
+      isSessionsFetched &&
+      !isLoadingSessions &&
+      sessions.length === 0
+    ) {
       setShowModal(true);
     }
   }, [sessionId, isSessionsFetched, isLoadingSessions, sessions.length]);
@@ -140,7 +144,9 @@ export function SessionManager({
       setNewSessionId("");
     } catch (error) {
       console.error("Failed to join session:", error);
-      alert("Failed to join session. Please check the session ID and try again.");
+      alert(
+        "Failed to join session. Please check the session ID and try again."
+      );
     }
   };
 
@@ -154,7 +160,6 @@ export function SessionManager({
       console.error("Failed to copy link:", error);
     }
   };
-
 
   // Show session info bar when session is active (mobile only - desktop uses GroupChat header)
   // Fixed below the main mobile header, always shows full information
@@ -220,7 +225,6 @@ export function SessionManager({
               <div className="space-y-3">
                 <button
                   onClick={() => setShowCreateDialog(true)}
-                  disabled={isCreating}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 md:py-3 bg-[#9c27b0] hover:bg-[#7b1fa2] text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-sm md:text-base"
                 >
                   Create New Session
@@ -246,7 +250,7 @@ export function SessionManager({
 
                 <button
                   onClick={handleJoinSession}
-                  disabled={!newSessionId.trim() || isCreating}
+                  disabled={!newSessionId.trim()}
                   className="w-full px-4 py-2.5 md:py-3 bg-[#333333] hover:bg-[#2a2a2a] text-[#e0e0e0] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-sm md:text-base"
                 >
                   Join Session
@@ -266,4 +270,3 @@ export function SessionManager({
     </>
   );
 }
-

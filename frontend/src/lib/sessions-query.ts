@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getApiUrl } from "@/lib/api-config";
+import { generateSessionId } from "./session-utils";
 
 export interface Session {
   session_id: string;
@@ -120,8 +121,8 @@ export function useCreateSession() {
 
       // Optimistically update to the new value
       const optimisticSession: Session = {
-        session_id: newSession.sessionId,
-        session_name: newSession.sessionName,
+        session_id: generateSessionId(),
+        session_name: newSession.session_name,
         owner_id: newSession.owner_id,
         member_id_list: newSession.owner_id,
         last_updated: new Date().toISOString(),
@@ -137,7 +138,10 @@ export function useCreateSession() {
       );
 
       // Return a context object with the snapshotted value
-      return { previousSessions, optimisticSessionId: newSession.sessionId };
+      return {
+        previousSessions,
+        optimisticSessionId: optimisticSession.session_id,
+      };
     },
     onError: (err, newSession, context) => {
       // If the mutation fails, use the context returned from onMutate to roll back
