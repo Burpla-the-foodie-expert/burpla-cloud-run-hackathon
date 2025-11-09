@@ -671,9 +671,12 @@ export function GroupChat({
     }
   };
 
-  // Group messages by user (filter out empty messages)
+  // Group messages by user (filter out empty messages and non-agent queries)
   const validMessages = messages.filter(
-    (msg) => msg.content && msg.content.trim().length > 0
+    (msg) =>
+      msg.content &&
+      msg.content.trim().length > 0 &&
+      msg.content.trim() !== "THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER"
   );
   const groupedMessages: MessageGroup[] = [];
   let currentGroup: MessageGroup | null = null;
@@ -794,30 +797,40 @@ export function GroupChat({
           </div>
         ) : (
           <div className="space-y-2">
-            {groupedMessages.map((group, groupIndex) => {
-              const isBot =
-                group.userId === "burpla" ||
-                group.userId === "ai" ||
-                group.messages[0]?.role === "assistant";
-              return isBot ? (
-                <BotMessage
-                  key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
-                  group={group}
-                  groupIndex={groupIndex}
-                  sessionId={sessionId}
-                  userId={userId}
-                  onVoteUpdate={() =>
-                    refreshMessages(sessionId, userLocation || null)
-                  }
-                />
-              ) : (
-                <UserMessage
-                  key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
-                  group={group}
-                  groupIndex={groupIndex}
-                />
-              );
-            })}
+            {groupedMessages
+              .filter((group) => {
+                // Filter out groups where all messages would be hidden
+                const validMessagesInGroup = group.messages.filter(
+                  (msg) =>
+                    msg.content.trim() !==
+                    "THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER"
+                );
+                return validMessagesInGroup.length > 0;
+              })
+              .map((group, groupIndex) => {
+                const isBot =
+                  group.userId === "burpla" ||
+                  group.userId === "ai" ||
+                  group.messages[0]?.role === "assistant";
+                return isBot ? (
+                  <BotMessage
+                    key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
+                    group={group}
+                    groupIndex={groupIndex}
+                    sessionId={sessionId}
+                    userId={userId}
+                    onVoteUpdate={() =>
+                      refreshMessages(sessionId, userLocation || null)
+                    }
+                  />
+                ) : (
+                  <UserMessage
+                    key={`${group.userId}-${group.messages[0].timestamp}-${groupIndex}`}
+                    group={group}
+                    groupIndex={groupIndex}
+                  />
+                );
+              })}
 
             {/* Loading indicator when bot is responding */}
             {isLoading && (

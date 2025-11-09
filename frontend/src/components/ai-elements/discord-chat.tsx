@@ -58,7 +58,10 @@ export function DiscordChat({
 
   messages
     .filter(
-      (message) => message.role === "user" || message.role === "assistant"
+      (message) =>
+        (message.role === "user" || message.role === "assistant") &&
+        message.content.trim() !==
+          "THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER"
     )
     .forEach((message, index, filteredMessages) => {
       const isUser = message.role === "user";
@@ -157,13 +160,19 @@ export function DiscordChat({
                     </div>
 
                     {/* Messages in group */}
-                    {group.messages.map((message) => (
-                      <div key={message.id} className="mb-2 last:mb-0">
-                        <div className="text-[#e0e0e0] text-sm whitespace-pre-wrap break-words">
-                          {message.content}
+                    {group.messages
+                      .filter(
+                        (message) =>
+                          message.content.trim() !==
+                          "THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER"
+                      )
+                      .map((message) => (
+                        <div key={message.id} className="mb-2 last:mb-0">
+                          <div className="text-[#e0e0e0] text-sm whitespace-pre-wrap break-words">
+                            {message.content}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
               </div>

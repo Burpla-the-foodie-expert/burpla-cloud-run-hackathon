@@ -16,38 +16,44 @@ export function Chat() {
             Start a conversation by typing a message below
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex gap-3 ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              {message.role === 'assistant' && (
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-              )}
+          messages
+            .filter(
+              (message) =>
+                message.content.trim() !==
+                "THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER"
+            )
+            .map((message) => (
               <div
-                className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                  message.role === 'user'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                key={message.id}
+                className={`flex gap-3 ${
+                  message.role === 'user' ? 'justify-end' : 'justify-start'
                 }`}
               >
-                <div className="whitespace-pre-wrap">{message.content}</div>
-              </div>
-              {message.role === 'user' && (
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center">
-                    <User className="w-5 h-5 text-white" />
+                {message.role === 'assistant' && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                      <Bot className="w-5 h-5 text-white" />
+                    </div>
                   </div>
+                )}
+                <div
+                  className={`rounded-lg px-4 py-2 max-w-[80%] ${
+                    message.role === 'user'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100'
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap">{message.content}</div>
                 </div>
-              )}
-            </div>
-          ))
+                {message.role === 'user' && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
         )}
         {isLoading && (
           <div className="flex gap-3 justify-start">

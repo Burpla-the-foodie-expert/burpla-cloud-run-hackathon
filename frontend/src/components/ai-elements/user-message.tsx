@@ -53,22 +53,28 @@ export function UserMessage({ group, groupIndex }: UserMessageProps) {
           </div>
 
           {/* Messages in group */}
-          {group.messages.map((message) => {
-            const isError = message.content.startsWith("Error:");
-            return (
-              <div key={message.id} className="mb-2 last:mb-0">
-                <div
-                  className={`text-sm whitespace-pre-wrap break-words ${
-                    isError
-                      ? "text-red-400 bg-red-900/20 border border-red-800/30 px-3 py-2 rounded"
-                      : "text-[#e0e0e0]"
-                  }`}
-                >
-                  {message.content}
+          {group.messages
+            .filter(
+              (message) =>
+                message.content.trim() !==
+                "THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER"
+            )
+            .map((message) => {
+              const isError = message.content.startsWith("Error:");
+              return (
+                <div key={message.id} className="mb-2 last:mb-0">
+                  <div
+                    className={`text-sm whitespace-pre-wrap break-words ${
+                      isError
+                        ? "text-red-400 bg-red-900/20 border border-red-800/30 px-3 py-2 rounded"
+                        : "text-[#e0e0e0]"
+                    }`}
+                  >
+                    {message.content}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
       </div>
     </div>
