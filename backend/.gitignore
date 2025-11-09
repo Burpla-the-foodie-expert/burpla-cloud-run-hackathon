@@ -150,3 +150,5 @@ firestore-debug.log
 # Ignore research folder
 /research
 research/
+
+cloud_db_test.py

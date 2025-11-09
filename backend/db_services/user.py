@@ -33,9 +33,9 @@ class UserManager:
             if count == 0:
                 # Add 3 random users
                 random_users = [
-                    ("user_001", "Huy Bui", "williamhuybui@gmail.com", "Vietnamese noodle, Bun Bo Hue", "Pearland, TX 77047"),
-                    ("user_002", "Huy Nguyen", "huynguyen.me@gmail.com", "Pho, springroll", "Cypress, TX 77429"),
-                    ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "Houston, TX 77084")
+                    ("user_001", "Huy Bui", "williamhuybui@gmail.com", "Vietnamese noodle, Bun Bo Hue", "12315 Churchill Downs Dr, TX 77047"),
+                    ("user_002", "Huy Nguyen", "huynguyen.me@gmail.com", "Pho, springroll", "11815 catrose ln, Cypress TX 77429"),
+                    ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "823 Malone St, Houston, TX 77007")
                 ]
 
                 cursor.executemany(f"""

@@ -72,12 +72,14 @@ async def send_user_message(message: UserMessage):
         # Wrapper for user info
         query_wrapper = f"""
             Information about the user for more context: Name: {user_info[1]}, Preferences: {user_info[3]}, Location: {user_info[4]}
+            Only use it if the user query requires more context about the user.
+
             Query: {query}
         """
         # logger.info(query_wrapper)
-        logger.info(f"📝 Query: {query}")
+        logger.info(f"📝 Query: {query_wrapper}")
         response = await run_conversation(
-            query, app_name="burpla", user_id=user_id, session_id=session_id
+            query_wrapper, app_name="burpla", user_id=user_id, session_id=session_id
         )
 
         logger.info(f"✅ Response: {response}")
