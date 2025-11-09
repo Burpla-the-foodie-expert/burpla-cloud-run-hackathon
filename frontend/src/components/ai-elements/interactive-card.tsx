@@ -930,7 +930,7 @@ function VotingCard({
           messageId
         )}&vote_option_id=${encodeURIComponent(
           optionId
-        )}&is_vote_up=${isVotingUp}&is_to_agent=true`
+        )}&is_vote_up=${isVotingUp}&is_to_agent=false`
       );
 
       const response = await fetch(voteUrl, {
