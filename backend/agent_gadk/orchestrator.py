@@ -175,3 +175,4 @@ async def run_conversation(
                 user_id=user_id,
                 session_id=session_id,
             )
+    return "Failed to generate valid response. Please try again"
