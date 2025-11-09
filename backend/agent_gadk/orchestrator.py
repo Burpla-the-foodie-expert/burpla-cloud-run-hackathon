@@ -108,14 +108,14 @@ async def call_agent_async(
 async def run_conversation(
     query: str,
     app_name: str = "burpla",
-    owner_id: str = "something",
+    user_id: str = "something",
     session_id: str = "something",
 ):
     try:
         session_key = (app_name, session_id)
         if session_key not in created_sessions:
             await session_service.create_session(
-                app_name=app_name, user_id=owner_id, session_id=session_id
+                app_name=app_name, user_id=user_id, session_id=session_id
             )
             created_sessions.add(session_key)
 
@@ -126,7 +126,7 @@ async def run_conversation(
         response = await call_agent_async(
             query=query,
             runner=runner_agent_team,
-            user_id=owner_id,
+            user_id=user_id,
             session_id=session_id,
         )
 

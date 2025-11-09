@@ -29,7 +29,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
+        "http://localhost:8000",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
         "https://burpla-ui-415080714475.northamerica-northeast1.run.app", # Production frontend URL
     ],
     allow_credentials=True,

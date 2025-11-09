@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SessionProvider } from "next-auth/react";
 import { ReactQueryProvider } from "@/lib/react-query-provider";
 import { Sidebar } from "@/components/ai-elements/sidebar";
@@ -16,6 +16,7 @@ import {
   getOrCreateUserId,
   generateUserId,
 } from "@/lib/session-utils";
+import { getApiUrl } from "@/lib/api-config";
 import { Menu, X, Users } from "lucide-react";
 
 interface UserData {
@@ -38,8 +39,14 @@ export default function Home() {
     return false;
   });
   const [usersPanelOpen, setUsersPanelOpen] = useState(false);
+  const initHasRun = useRef(false);
 
   useEffect(() => {
+    if (initHasRun.current) {
+      return;
+    }
+    initHasRun.current = true;
+
     // Check if user has already initialized
     if (typeof window !== "undefined") {
       // Clean up unwanted query parameters from NextAuth callback
@@ -69,6 +76,80 @@ export default function Home() {
       const storedSessionId = localStorage.getItem("currentSessionId");
       const userEmail = localStorage.getItem("userEmail");
 
+      // This function will run on mount and handle the entire initialization flow.
+      const initializeUserAndSession = async () => {
+        try {
+          let definitiveUserId: string | null = null;
+
+          // Step 1: ALWAYS try to authenticate with email first if it exists.
+          if (userEmail) {
+            try {
+              const authResponse = await fetch(getApiUrl("/authentication"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  gmail: userEmail,
+                  name: userName || undefined,
+                }),
+              });
+
+              if (authResponse.ok) {
+                const authData = await authResponse.json();
+                if (authData.is_authenticated && authData.user_id) {
+                  definitiveUserId = authData.user_id; // Canonical ID from backend.
+                }
+              }
+            } catch (error) {
+              console.error("Auth failed, will fall back to local user ID.", error);
+            }
+          }
+
+          // Step 2: If we STILL don't have an ID, fall back to whatever is in storage, or create a new one.
+          if (!definitiveUserId) {
+            definitiveUserId = getOrCreateUserId();
+          }
+
+          // Step 3: Now, set state and storage ONCE with the definitive ID.
+          localStorage.setItem("userId", definitiveUserId);
+          setUserId(definitiveUserId);
+
+          // Step 4: With the definitive userId, handle the session.
+          const urlSessionId = getSessionIdFromUrl();
+          if (urlSessionId) {
+            setSessionId(urlSessionId);
+            setCurrentSessionId(urlSessionId);
+          } else if (storedSessionId) {
+            setSessionId(storedSessionId);
+            setSessionIdInUrl(storedSessionId);
+          } else {
+            // No session in URL or storage, so we create a new one.
+            try {
+              const sessionResponse = await fetch(getApiUrl("/session/create"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  owner_id: definitiveUserId,
+                  session_name: "New Session",
+                  user_id_list: [definitiveUserId],
+                }),
+              });
+              const sessionData = await sessionResponse.json();
+              if (sessionData.success && sessionData.session_id) {
+                setSessionId(sessionData.session_id);
+                setCurrentSessionId(sessionData.session_id);
+                setSessionIdInUrl(sessionData.session_id);
+              }
+            } catch (error) {
+              console.error("Failed to auto-create session:", error);
+            }
+          }
+        } catch (e) {
+            console.error("A critical error occurred during initialization:", e);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
       if (initialized === "true" && userName) {
         setUserData({
           name: userName,
@@ -77,67 +158,8 @@ export default function Home() {
         });
         setIsInitialized(true);
       }
-
-      // Check if we need to authenticate with backend
-      // If we have an email but userId looks like it was generated locally (contains timestamp pattern)
-      const isLocalUserId = storedUserId && /^\d{13}-/.test(storedUserId);
-
-      if (userEmail && (isLocalUserId || !storedUserId)) {
-        // Re-authenticate to get backend user_id
-        fetch("/api/authentication", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            gmail: userEmail,
-            name: userName || undefined,
-          }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.is_authenticated && data.user_id) {
-              localStorage.setItem("userId", data.user_id);
-              setUserId(data.user_id);
-            } else if (!storedUserId) {
-              // Fallback: generate local userId if backend auth fails
-              const newUserId = generateUserId();
-              localStorage.setItem("userId", newUserId);
-              setUserId(newUserId);
-            } else {
-              setUserId(storedUserId);
-            }
-          })
-          .catch((error) => {
-            console.error("Error authenticating with backend:", error);
-            // Fallback: use existing or generate new userId
-            if (!storedUserId) {
-              const newUserId = generateUserId();
-              localStorage.setItem("userId", newUserId);
-              setUserId(newUserId);
-            } else {
-              setUserId(storedUserId);
-            }
-          });
-      } else if (!storedUserId) {
-        // No email available, generate local userId as fallback
-        const newUserId = getOrCreateUserId();
-        setUserId(newUserId);
-      } else {
-        setUserId(storedUserId);
-      }
-
-      // Check for session ID in URL or localStorage
-      const urlSessionId = getSessionIdFromUrl();
-
-      if (urlSessionId) {
-        setSessionId(urlSessionId);
-        setCurrentSessionId(urlSessionId);
-      } else if (storedSessionId) {
-        setSessionId(storedSessionId);
-        // Update URL to match localStorage
-        setSessionIdInUrl(storedSessionId);
-      }
-
-      setIsLoading(false);
+      
+      initializeUserAndSession();
     }
   }, []);
 
@@ -171,14 +193,13 @@ export default function Home() {
 
     // Join session if user is initialized
     if (userData && userId) {
-      fetch("/api/sessions", {
+      console.log('2222 userId: ', userId)
+      fetch(getApiUrl("/session/join"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "join",
-          sessionId: id,
-          userId,
-          userName: userData.name,
+          session_id: id,
+          user_id: userId,
         }),
       }).catch(console.error);
     }

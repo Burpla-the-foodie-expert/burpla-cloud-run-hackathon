@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { signIn, useSession } from "next-auth/react";
+import { getApiUrl } from "@/lib/api-config";
 
 interface WelcomeScreenProps {
   onComplete: (data: { name: string; location: { lat: number; lng: number } | null; email?: string }) => void;
@@ -22,7 +23,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
       // Authenticate with backend and get/create user
       const authenticateUser = async () => {
         try {
-          const response = await fetch("/api/authentication", {
+          const response = await fetch(getApiUrl("/authentication"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

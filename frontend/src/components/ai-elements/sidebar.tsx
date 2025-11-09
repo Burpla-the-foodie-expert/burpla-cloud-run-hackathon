@@ -69,19 +69,13 @@ export function Sidebar({
   const [createError, setCreateError] = useState<string | null>(null);
   const hasCheckedSessionsRef = useRef(false);
 
-  // Get userId from prop or localStorage
-  const effectiveUserId =
-    userId ||
-    (typeof window !== "undefined" ? localStorage.getItem("userId") : null) ||
-    "user_001";
-
   // Use React Query to fetch sessions
   const {
     data: sessions = [],
     isLoading,
     isFetched,
     refetch: refetchSessions,
-  } = useSessions(effectiveUserId);
+  } = useSessions(userId || null); // ALWAYS use the userId from props, fallback to null
 
   // Mutations for updating sessions
   const updateSessionNameMutation = useUpdateSessionName();
@@ -90,7 +84,7 @@ export function Sidebar({
   // Use session management hook
   const { createSession } = useSessionManagement({
     onSessionChange,
-    userId: effectiveUserId,
+    userId: userId || null, // ALWAYS use the userId from props, fallback to null
     userName: displayName,
   });
 
@@ -228,7 +222,7 @@ export function Sidebar({
       return;
     }
 
-    if (isCreating) return; // Prevent double submission
+    if (isCreating || !userId) return; // Add guard to prevent creation if userId is not ready
 
     setIsCreating(true);
     setCreateError(null);
@@ -271,16 +265,16 @@ export function Sidebar({
 
     // Clear user from server-side sessions
     if (userId) {
-      try {
-        await fetch("/api/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "logout", userId }),
-        });
-      } catch (error) {
-        console.error("Failed to logout from sessions:", error);
-        // Continue with logout even if API call fails
-      }
+      // try {
+      //   await fetch(getApiUrl("/sessions"), {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     body: JSON.stringify({ action: "logout", userId }),
+      //   });
+      // } catch (error) {
+      //   console.error("Failed to logout from sessions:", error);
+      //   // Continue with logout even if API call fails
+      // }
     }
 
     // Clear all local storage data
@@ -391,9 +385,9 @@ export function Sidebar({
                   />
                   <button
                     type="submit"
-                    disabled={isCreating || !newSessionName.trim()}
+                    disabled={isCreating || !newSessionName.trim() || !userId} // Disable if userId is null
                     className="px-3 py-2 bg-[#9c27b0] hover:bg-[#7b1fa2] text-white text-sm font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
-                    title="Create session"
+                    title={!userId ? "Authenticating..." : "Create session"}
                   >
                     {isCreating ? (
                       <>

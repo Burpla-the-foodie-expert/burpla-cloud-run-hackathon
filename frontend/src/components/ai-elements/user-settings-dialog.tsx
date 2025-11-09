@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, MapPin, User, Mail, Key, Save, RefreshCw } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { getApiUrl } from "@/lib/api-config";
 
 interface UserSettingsDialogProps {
   isOpen: boolean;
@@ -115,14 +116,13 @@ export function UserSettingsDialog({ isOpen, onClose, onUpdate }: UserSettingsDi
       // Update user name in active sessions if user is in a session
       if (userId && currentSessionId) {
         try {
-          await fetch("/api/sessions", {
+          await fetch(getApiUrl("/session/join"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: "join", // Re-join with updated name
-              sessionId: currentSessionId,
-              userId,
-              userName: name.trim(),
+              session_id: currentSessionId,
+              user_id: userId,
+              // userName: name.trim(), // Join endpoint does not take userName
             }),
           });
         } catch (error) {

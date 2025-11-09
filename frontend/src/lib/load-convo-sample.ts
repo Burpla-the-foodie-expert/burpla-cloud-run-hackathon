@@ -1,25 +1,30 @@
-import type { ConvoMessage } from "./conversation-utils";
+import type { ConvoMessage } from "@/lib/conversation-utils";
+import { getApiUrl } from "@/lib/api-config";
 
 /**
- * Loads the convo_sample.json data
- * In a real app, this would fetch from an API endpoint
- * For now, we'll import it directly or fetch it
+ * Fetches the conversation sample data from the backend.
+ * Caches the result in memory to avoid repeated requests.
  */
+let cachedConvo: ConvoMessage[] | null = null;
+
 export async function loadConvoSample(): Promise<ConvoMessage[]> {
-  try {
-    // Try to fetch from the backend API first
-    const response = await fetch("/api/conversation-sample");
-    if (response.ok) {
-      const data = await response.json();
-      return data;
-    }
-  } catch (error) {
-    console.warn("Failed to fetch from API, trying direct import:", error);
+  if (cachedConvo) {
+    return cachedConvo;
   }
 
-  // Fallback: return empty array or import directly if needed
-  // In production, you'd want to fetch this from an API endpoint
-  return [];
+  try {
+    const response = await fetch(getApiUrl("/conversation-sample"));
+    if (response.ok) {
+      const data = await response.json();
+      cachedConvo = data; // Cache the result
+      return data;
+    }
+    console.error("Failed to load conversation sample:", response.statusText);
+    return [];
+  } catch (error) {
+    console.error("Error fetching conversation sample:", error);
+    return [];
+  }
 }
 
 /**
@@ -158,7 +163,8 @@ export const exampleConvoData: ConvoMessage[] = [
     type: "end_card",
     content: {
       title: "Reminder Set! 🔔",
-      message: "The reminder has been successfully sent to everyone in this chat.",
+      message:
+        "The reminder has been successfully sent to everyone in this chat.",
       see_you_at: {
         restaurant_name: "The Spicy Crab Shack",
         direction: {
@@ -170,4 +176,3 @@ export const exampleConvoData: ConvoMessage[] = [
     },
   },
 ];
-

@@ -151,7 +151,7 @@ async def send_user_message(message: UserMessage):
         response = await run_conversation(
             query,
             app_name="burpla",
-            owner_id=owner_id,
+            user_id=user_id,
             session_id=session_id,
         )
 
@@ -185,7 +185,7 @@ async def send_user_message(message: UserMessage):
         response = await run_conversation(
             query_wrapper,
             app_name="burpla",
-            owner_id=owner_id,
+            user_id=user_id,
             session_id=session_id,
         )
         return Response(status_code=204)  # No content response

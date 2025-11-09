@@ -3,100 +3,92 @@
  * Consolidates session creation, joining, and state management
  */
 
-import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateSession } from "@/lib/sessions-query";
 import {
   generateSessionId,
-  getOrCreateUserId,
-  getUserName,
   setCurrentSessionId,
   setSessionIdInUrl,
+  getOrCreateUserId,
+  getUserName,
 } from "@/lib/session-utils";
+import { useCreateSession } from "./sessions-query";
+import { useCallback } from "react";
+import { getApiUrl } from "./api-config";
 
 interface UseSessionManagementOptions {
   onSessionChange?: (sessionId: string) => void;
-  userId?: string | null;
-  userName?: string;
+  userId: string | null;
+  userName: string | null;
 }
 
-/**
- * Hook for managing session operations
- */
 export function useSessionManagement({
   onSessionChange,
   userId,
   userName,
-}: UseSessionManagementOptions = {}) {
-  const createSessionMutation = useCreateSession();
+}: UseSessionManagementOptions) {
   const queryClient = useQueryClient();
+  const createSessionMutation = useCreateSession();
 
-  /**
-   * Create a new session
-   */
   const createSession = useCallback(
-    async (sessionName: string): Promise<string> => {
-      const effectiveUserId = userId || getOrCreateUserId();
-      const effectiveUserName = userName || getUserName();
-      const newSessionId = generateSessionId();
+    async (sessionName: string) => {
+      // Always use the latest userId from props, do not fall back to getOrCreateUserId here.
+      // The button in the UI should be disabled if userId is not available.
+      if (!userId) {
+        console.error("Create session called without a userId.");
+        // Optionally, throw an error or return early
+        throw new Error("User is not authenticated, cannot create session.");
+      }
+
+      const effectiveUserName = userName || "User";
 
       try {
-        // Use React Query mutation for optimistic update
-        const result = await createSessionMutation.mutateAsync({
-          sessionId: newSessionId,
-          userId: effectiveUserId,
+        const newSession = await createSessionMutation.mutateAsync({
+          owner_id: userId,
           userName: effectiveUserName,
-          sessionName: sessionName.trim(),
+          session_name: sessionName,
         });
 
-        // Use the sessionId from the response (backend might return a different one)
-        const finalSessionId = result.sessionId || newSessionId;
-
-        // Update localStorage and URL
-        setCurrentSessionId(finalSessionId);
-        setSessionIdInUrl(finalSessionId);
-
-        // Notify parent component
-        if (onSessionChange) {
-          onSessionChange(finalSessionId);
+        // After successful creation, trigger session change
+        if (newSession.session_id && onSessionChange) {
+          onSessionChange(newSession.session_id);
         }
 
-        return finalSessionId;
+        return newSession;
       } catch (error) {
         console.error("Failed to create session:", error);
-        throw error;
+        throw error; // Re-throw to be caught by the component
       }
     },
-    [userId, userName, onSessionChange, createSessionMutation]
+    [userId, userName, createSessionMutation, onSessionChange, queryClient]
   );
 
-  /**
-   * Join an existing session
-   */
   const joinSession = useCallback(
-    async (sessionIdToJoin: string): Promise<void> => {
-      const effectiveUserId = userId || getOrCreateUserId();
-      const effectiveUserName = userName || getUserName();
+    async (sessionIdToJoin: string) => {
+      if (!userId) {
+        console.error("Join session called without a userId.");
+        throw new Error("User is not authenticated, cannot join session.");
+      }
 
       try {
-        const response = await fetch("/api/sessions", {
+        // First, join the session on the backend
+        const response = await fetch(getApiUrl("/session/join"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: "join",
-            sessionId: sessionIdToJoin.trim(),
-            userId: effectiveUserId,
-            userName: effectiveUserName,
+            session_id: sessionIdToJoin.trim(),
+            user_id: userId,
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to join session");
+          throw new Error(errorData.detail || "Failed to join session");
         }
 
         // Invalidate sessions query to refetch and show the newly joined session
-        queryClient.invalidateQueries({ queryKey: ["sessions", effectiveUserId] });
+        queryClient.invalidateQueries({
+          queryKey: ["sessions", userId],
+        });
 
         // Update localStorage and URL
         setCurrentSessionId(sessionIdToJoin);
@@ -111,13 +103,8 @@ export function useSessionManagement({
         throw error;
       }
     },
-    [userId, userName, onSessionChange, queryClient]
+    [userId, onSessionChange, queryClient]
   );
 
-  return {
-    createSession,
-    joinSession,
-    isCreating: createSessionMutation.isPending,
-  };
+  return { createSession, joinSession };
 }
-

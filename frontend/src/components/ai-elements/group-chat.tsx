@@ -548,18 +548,8 @@ export function GroupChat({
       };
       addMessageToCache(sessionId, cachedMessage);
 
-      // Send message to session
-      const sendResponse = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "send",
-          sessionId,
-          userId,
-          message: messageContent,
-          messageId,
-        }),
-      });
+      // The `/chat/sent` endpoint handles saving the message and triggering the AI.
+      // The old call to `/api/sessions` with "send" action is now removed.
 
       // Mark that user stopped typing and resume polling
       if (sessionId) {
@@ -568,23 +558,14 @@ export function GroupChat({
 
       // Refresh messages after sending to ensure backend has the message
       // The cache already has the optimistic message, so this will just sync with backend
-      if (sendResponse.ok) {
-        // Small delay to ensure backend has processed the message
-        setTimeout(() => {
-          refreshMessages(sessionId, userLocation || null).catch(console.error);
-        }, 500);
-      } else {
-        // If send failed, remove the optimistic message
-        // The cache will be refreshed on next poll and won't include the failed message
-        console.error(
-          "Failed to send message, optimistic message will be removed on next refresh"
-        );
-      }
+      // setTimeout(() => {
+      //   refreshMessages(sessionId, userLocation || null).catch(console.error);
+      // }, 500);
 
       // Only send to AI if @burpla is mentioned
       // Note: The message was already saved to backend via saveMessageToBackend in sessions route
       // So we only need to trigger the AI response here, not save the message again
-      if (sendResponse.ok && messageMentionsBurpla) {
+      if (messageMentionsBurpla) {
         setIsLoading(true);
 
         // Call backend Python API /chat/sent endpoint
@@ -606,91 +587,13 @@ export function GroupChat({
           });
 
           if (sentResponse.ok) {
-            const sentData = await sentResponse.json();
-
-            // Parse the message to check if it contains a card (recommendation or voting)
-            const { content: messageContent, cardConfig } = parseMessageForCard(
-              sentData.message || "",
-              userLocation || null
+            // The backend's /chat/sent response now includes the saved messages.
+            // We can use this to refresh our local cache directly.
+            // No need to optimistically add the bot's message.
+            // Let the polling mechanism or a direct refresh handle it.
+            refreshMessages(sessionId, userLocation || null).catch(
+              console.error
             );
-
-            // Create message with cardConfig if available
-            // Backend returns: { user_id, name, message, message_id }
-            const aiMessage: Message = {
-              id: sentData.message_id || messageId,
-              userId: "burpla",
-              userName: sentData.name || "Burpla",
-              content: messageContent,
-              role: "assistant",
-              timestamp: Date.now(),
-              cardConfig: cardConfig,
-            };
-
-            setMessages((prev) => {
-              // Check if message already exists (by ID or by content + userId + timestamp)
-              const existingIds = new Set(prev.map((m) => m.id));
-              const existingMessageKeys = new Set(
-                prev.map(
-                  (m) =>
-                    `${m.userId}:${m.content.substring(0, 50)}:${m.timestamp}`
-                )
-              );
-
-              const messageKey = `${
-                aiMessage.userId
-              }:${aiMessage.content.substring(0, 50)}:${aiMessage.timestamp}`;
-
-              // Skip if already exists
-              if (
-                existingIds.has(aiMessage.id) ||
-                existingMessageKeys.has(messageKey)
-              ) {
-                return prev;
-              }
-
-              const combined = [...prev, aiMessage];
-              // Remove duplicates after combining
-              const uniqueMessages = combined.reduce(
-                (acc, msg) => {
-                  const key = `${msg.id}:${msg.userId}:${msg.content.substring(
-                    0,
-                    50
-                  )}:${msg.timestamp}`;
-                  if (!acc.seen.has(key)) {
-                    acc.seen.add(key);
-                    acc.messages.push(msg);
-                  }
-                  return acc;
-                },
-                { seen: new Set<string>(), messages: [] as Message[] }
-              ).messages;
-
-              return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
-            });
-
-            // Save to session (still using Next.js API for session management)
-            try {
-              await fetch("/api/sessions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  action: "send",
-                  sessionId,
-                  userId: "burpla",
-                  message: messageContent, // Use processed messageContent instead of raw sentData.message
-                  messageId: sentData.message_id || messageId,
-                  cardConfig: cardConfig, // Include cardConfig if available
-                }),
-              });
-            } catch (sessionError) {
-              console.error("Failed to save to session:", sessionError);
-            }
-
-            // Don't refresh immediately - the AI message is already added optimistically
-            // The cache will pick it up on the next poll cycle
-
-            setIsLoading(false);
-            return; // Exit early since we got response from backend
           } else {
             // Backend returned an error
             const errorData = await sentResponse
@@ -718,40 +621,35 @@ export function GroupChat({
             role: "assistant",
             timestamp: Date.now(),
           };
-          setMessages((prev) => {
-            // Check if message already exists
-            const existingIds = new Set(prev.map((m) => m.id));
-            if (existingIds.has(errorMessage.id)) {
-              return prev;
-            }
-            const combined = [...prev, errorMessage];
-            // Remove duplicates after combining
-            const uniqueMessages = combined.reduce(
-              (acc, msg) => {
-                const key = `${msg.id}:${msg.userId}:${msg.content.substring(
-                  0,
-                  50
-                )}:${msg.timestamp}`;
-                if (!acc.seen.has(key)) {
-                  acc.seen.add(key);
-                  acc.messages.push(msg);
-                }
-                return acc;
-              },
-              { seen: new Set<string>(), messages: [] as Message[] }
-            ).messages;
-            return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
-          });
+          setMessages((prev) => [...prev, errorMessage]);
+        } finally {
           setIsLoading(false);
-          setIsSending(false); // Reset sending flag
-          return;
         }
-
-        // Note: Backend doesn't support streaming, all responses come from /chat/sent endpoint
       } else {
-        // Message sent successfully but doesn't mention @burpla, so no AI response needed
-        setIsSending(false); // Reset sending flag
+        // If not mentioning burpla, just save the message
+        try {
+          const backendUrl = getApiUrl("/chat/sent"); // Same endpoint, but is_to_agent is false
+          await fetch(backendUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: userId,
+              message: messageContent,
+              session_id: sessionId,
+              is_to_agent: false, // The only difference
+            }),
+          });
+          // After sending, refresh messages to get the confirmed message from the backend
+          refreshMessages(sessionId, userLocation || null).catch(
+            console.error
+          );
+        } catch (error) {
+          console.error("Failed to save user message:", error);
+        }
       }
+
+      // Reset sending flag
+      setIsSending(false);
     } catch (error: any) {
       console.error("Failed to send message:", error);
       setIsSending(false); // Reset sending flag on error
@@ -767,30 +665,7 @@ export function GroupChat({
         role: "assistant",
         timestamp: Date.now(),
       };
-      setMessages((prev) => {
-        // Check if message already exists
-        const existingIds = new Set(prev.map((m) => m.id));
-        if (existingIds.has(errorMessage.id)) {
-          return prev;
-        }
-        const combined = [...prev, errorMessage];
-        // Remove duplicates after combining
-        const uniqueMessages = combined.reduce(
-          (acc, msg) => {
-            const key = `${msg.id}:${msg.userId}:${msg.content.substring(
-              0,
-              50
-            )}:${msg.timestamp}`;
-            if (!acc.seen.has(key)) {
-              acc.seen.add(key);
-              acc.messages.push(msg);
-            }
-            return acc;
-          },
-          { seen: new Set<string>(), messages: [] as Message[] }
-        ).messages;
-        return uniqueMessages.sort((a, b) => a.timestamp - b.timestamp);
-      });
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }

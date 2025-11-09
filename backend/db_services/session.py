@@ -53,14 +53,15 @@ class SessionManager:
                 conn.commit()
 
     def add_session(self, session_id, session_name, owner_id, member_id_list):
-        """Adds a new  to the database."""
+        """Adds a new session to the database, including timestamps."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # Use INSERT OR IGNORE to avoid errors if session already exists
             cursor.execute(f"""
-                INSERT OR IGNORE INTO {self.table_name} (session_id, session_name, owner_id, member_id_list)
-                VALUES (?, ?, ?, ?)
-            """, (session_id, session_name, owner_id, member_id_list))
+                INSERT OR IGNORE INTO {self.table_name} (session_id, session_name, owner_id, member_id_list, created_date, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (session_id, session_name, owner_id, member_id_list, now, now))
             conn.commit()
 
     def _run_migration_if_needed(self):

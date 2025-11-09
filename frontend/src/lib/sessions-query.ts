@@ -16,6 +16,7 @@ export interface Session {
  * Fetch all sessions for a user
  */
 async function fetchSessions(userId: string): Promise<Session[]> {
+  console.log("1111 userId: ", userId);
   const backendUrl = getApiUrl(
     `/session/get_all?user_id=${encodeURIComponent(userId)}`
   );
@@ -36,20 +37,18 @@ async function fetchSessions(userId: string): Promise<Session[]> {
  * Create a new session
  */
 async function createSession(params: {
-  sessionId: string;
-  userId: string;
+  // sessionId: string; // The backend will generate the session_id
+  owner_id: string; // Renamed from userId to match backend model
   userName: string;
-  sessionName: string;
-}): Promise<{ sessionId: string; backendSessionId?: string }> {
-  const response = await fetch("/api/sessions", {
+  session_name: string; // Renamed from sessionName
+}) {
+  const response = await fetch(getApiUrl("/session/create"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      action: "create",
-      sessionId: params.sessionId,
-      userId: params.userId,
-      userName: params.userName,
-      sessionName: params.sessionName,
+      owner_id: params.owner_id,
+      session_name: params.session_name,
+      user_id_list: [params.owner_id], // Create session with owner as the first member
     }),
   });
 
@@ -81,7 +80,9 @@ async function updateSessionName(params: {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || errorData.error || "Failed to update session name");
+    throw new Error(
+      errorData.detail || errorData.error || "Failed to update session name"
+    );
   }
 }
 
@@ -107,26 +108,28 @@ export function useCreateSession() {
     mutationFn: createSession,
     onMutate: async (newSession) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["sessions", newSession.userId] });
+      await queryClient.cancelQueries({
+        queryKey: ["sessions", newSession.owner_id],
+      });
 
       // Snapshot the previous value
       const previousSessions = queryClient.getQueryData<Session[]>([
         "sessions",
-        newSession.userId,
+        newSession.owner_id,
       ]);
 
       // Optimistically update to the new value
       const optimisticSession: Session = {
         session_id: newSession.sessionId,
         session_name: newSession.sessionName,
-        owner_id: newSession.userId,
-        member_id_list: newSession.userId,
+        owner_id: newSession.owner_id,
+        member_id_list: newSession.owner_id,
         last_updated: new Date().toISOString(),
         created_date: new Date().toISOString(),
       };
 
       queryClient.setQueryData<Session[]>(
-        ["sessions", newSession.userId],
+        ["sessions", newSession.owner_id],
         (old = []) => {
           // Add new session at the beginning (most recent first)
           return [optimisticSession, ...old];
@@ -140,7 +143,7 @@ export function useCreateSession() {
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousSessions) {
         queryClient.setQueryData(
-          ["sessions", newSession.userId],
+          ["sessions", newSession.owner_id],
           context.previousSessions
         );
       }
@@ -149,7 +152,7 @@ export function useCreateSession() {
       // If backend returned a different session_id, update the optimistic session
       if (data.sessionId && data.sessionId !== context?.optimisticSessionId) {
         queryClient.setQueryData<Session[]>(
-          ["sessions", variables.userId],
+          ["sessions", variables.owner_id],
           (old = []) => {
             return old.map((session) =>
               session.session_id === context?.optimisticSessionId
@@ -160,7 +163,9 @@ export function useCreateSession() {
         );
       }
       // Invalidate and refetch to get the actual session from backend
-      queryClient.invalidateQueries({ queryKey: ["sessions", variables.userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["sessions", variables.owner_id],
+      });
     },
   });
 }
@@ -226,4 +231,3 @@ export function useUpdateSessionName() {
     },
   });
 }
-
