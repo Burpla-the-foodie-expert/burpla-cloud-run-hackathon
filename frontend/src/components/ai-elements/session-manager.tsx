@@ -1,153 +1,191 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Users, Plus, Hash, Copy, Check } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Hash, Copy, Check, Users, Hash as HashIcon } from "lucide-react";
+import { useSessions } from "@/lib/sessions-query";
+import { useSessionManagement } from "@/lib/use-session-management";
+import { CreateSessionDialog } from "./create-session-dialog";
+import {
+  getSessionIdFromUrl,
+  initializeSessionFromStorage,
+  setCurrentSessionId,
+  setSessionIdInUrl,
+  copySessionLink as copyLink,
+} from "@/lib/session-utils";
 
 interface SessionManagerProps {
   sessionId: string | null;
   userName: string;
+  userId: string | null;
   onSessionChange: (sessionId: string) => void;
 }
 
 export function SessionManager({
   sessionId,
   userName,
+  userId,
   onSessionChange,
 }: SessionManagerProps) {
   const [showModal, setShowModal] = useState(false);
   const [newSessionId, setNewSessionId] = useState("");
   const [copied, setCopied] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const hasInitializedRef = useRef(false);
 
+  // Get userId from prop or localStorage
+  const effectiveUserId =
+    userId ||
+    (typeof window !== "undefined" ? localStorage.getItem("userId") : null) ||
+    "user_001";
+
+  // Fetch available sessions
+  const {
+    data: sessions = [],
+    isLoading: isLoadingSessions,
+    isFetched: isSessionsFetched,
+  } = useSessions(effectiveUserId);
+
+  // Use session management hook
+  const { createSession, joinSession, isCreating } = useSessionManagement({
+    onSessionChange,
+    userId,
+    userName,
+  });
+
+  // Initialize session from URL or localStorage on mount
   useEffect(() => {
-    // Check URL for session ID
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const urlSessionId = params.get("session");
+    if (hasInitializedRef.current) return;
 
-      if (urlSessionId) {
-        onSessionChange(urlSessionId);
-      } else if (!sessionId) {
-        // Check localStorage for existing session
-        const storedSessionId = localStorage.getItem("currentSessionId");
-        if (storedSessionId) {
-          onSessionChange(storedSessionId);
-          // Update URL
-          const url = new URL(window.location.href);
-          url.searchParams.set("session", storedSessionId);
-          window.history.replaceState({}, "", url.toString());
-        } else {
-          // No session ID, show modal
-          setShowModal(true);
-        }
+    // Check URL for session ID first
+    const urlSessionId = getSessionIdFromUrl();
+    if (urlSessionId) {
+      setCurrentSessionId(urlSessionId);
+      onSessionChange(urlSessionId);
+      setShowModal(false);
+      hasInitializedRef.current = true;
+      return;
+    }
+
+    // If we already have a session, don't show modal
+    if (sessionId) {
+      setShowModal(false);
+      hasInitializedRef.current = true;
+      return;
+    }
+
+    // Check localStorage for existing session
+    const storedSessionId = initializeSessionFromStorage();
+    if (storedSessionId) {
+      onSessionChange(storedSessionId);
+      setShowModal(false);
+      hasInitializedRef.current = true;
+      return;
+    }
+
+    // Wait for sessions to be fetched before deciding whether to show modal
+    if (!isSessionsFetched || isLoadingSessions) {
+      return;
+    }
+
+    // Now that sessions are loaded, decide what to do
+    hasInitializedRef.current = true;
+
+    if (sessions.length > 0) {
+      // Auto-select the first available session
+      const firstSession = sessions[0];
+      if (firstSession?.session_id) {
+        setCurrentSessionId(firstSession.session_id);
+        setSessionIdInUrl(firstSession.session_id);
+        onSessionChange(firstSession.session_id);
+        setShowModal(false);
       }
+    } else {
+      // No sessions available, show modal
+      setShowModal(true);
     }
-  }, [onSessionChange, sessionId]);
+  }, [
+    sessionId,
+    isSessionsFetched,
+    isLoadingSessions,
+    sessions,
+    onSessionChange,
+  ]);
 
-  const createSession = async () => {
-    const id = `${Math.random().toString(36).substring(2, 9)}-${Math.random().toString(36).substring(2, 9)}`;
-    const userId = localStorage.getItem("userId") || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    localStorage.setItem("userId", userId);
+  // Update modal state when session changes
+  useEffect(() => {
+    if (sessionId) {
+      setShowModal(false);
+    } else if (isSessionsFetched && !isLoadingSessions && sessions.length === 0) {
+      setShowModal(true);
+    }
+  }, [sessionId, isSessionsFetched, isLoadingSessions, sessions.length]);
 
-    // Create session on backend
+  const handleCreateSession = async (sessionName: string) => {
     try {
-      await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          sessionId: id,
-          userId: userId,
-          userName: userName,
-        }),
-      });
+      await createSession(sessionName);
+      setShowCreateDialog(false);
+      setShowModal(false);
     } catch (error) {
-      console.error("Failed to create session:", error);
+      // Error is handled by CreateSessionDialog
+      throw error;
     }
-
-    // Store in localStorage
-    localStorage.setItem("currentSessionId", id);
-    onSessionChange(id);
-
-    // Update URL
-    const url = new URL(window.location.href);
-    url.searchParams.set("session", id);
-    window.history.replaceState({}, "", url.toString());
-
-    setShowModal(false);
   };
 
-  const joinSession = async () => {
-    if (newSessionId.trim()) {
-      const sessionIdToJoin = newSessionId.trim();
+  const handleJoinSession = async () => {
+    if (!newSessionId.trim()) return;
 
-      // Join session on backend
-      try {
-        const userId = localStorage.getItem("userId") || generateId();
-        localStorage.setItem("userId", userId);
-
-        await fetch("/api/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "join",
-            sessionId: sessionIdToJoin,
-            userId,
-            userName,
-          }),
-        });
-      } catch (error) {
-        console.error("Failed to join session:", error);
-      }
-
-      // Store in localStorage
-      localStorage.setItem("currentSessionId", sessionIdToJoin);
-      onSessionChange(sessionIdToJoin);
-
-      // Update URL
-      const url = new URL(window.location.href);
-      url.searchParams.set("session", sessionIdToJoin);
-      window.history.replaceState({}, "", url.toString());
-
+    try {
+      await joinSession(newSessionId.trim());
       setShowModal(false);
       setNewSessionId("");
+    } catch (error) {
+      console.error("Failed to join session:", error);
+      alert("Failed to join session. Please check the session ID and try again.");
     }
   };
 
-  const generateId = () => {
-    return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  const handleCopySessionLink = async () => {
+    if (!sessionId) return;
+    try {
+      await copyLink(sessionId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+    }
   };
 
-  const copySessionLink = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("session", sessionId || "");
-    navigator.clipboard.writeText(url.toString());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
-
+  // Show session info bar when session is active (mobile only - desktop uses GroupChat header)
+  // Fixed below the main mobile header, always shows full information
   if (!showModal && sessionId) {
+    // Get session name from sessions query
+    const currentSession = sessions?.find((s) => s.session_id === sessionId);
+    const sessionName = currentSession?.session_name || sessionId;
+
     return (
-      <div className="h-12 border-b border-[#333333] flex items-center justify-between px-4 bg-[#1e1e1e]">
-        <div className="flex items-center gap-2">
-          <Hash className="w-4 h-4 text-[#9e9e9e]" />
-          <span className="text-sm text-[#9e9e9e]">Session:</span>
-          <span className="text-sm font-mono text-[#e0e0e0]">{sessionId}</span>
+      <div className="md:hidden h-12 border-b border-[#333333] flex items-center justify-between px-2 md:px-4 bg-[#1e1e1e]">
+        <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden">
+          <Hash className="w-4 h-4 text-[#9e9e9e] flex-shrink-0" />
+          <span className="text-xs md:text-sm text-[#e0e0e0] truncate min-w-0">
+            {sessionName}
+          </span>
         </div>
         <button
-          onClick={copySessionLink}
-          className="flex items-center gap-1 px-2 py-1 text-xs text-[#9e9e9e] hover:text-[#9c27b0] hover:bg-[#333333] rounded transition-colors"
+          onClick={handleCopySessionLink}
+          className="flex items-center gap-1 px-2 py-1.5 md:py-1 text-xs text-[#9e9e9e] hover:text-[#9c27b0] hover:bg-[#333333] rounded transition-colors touch-manipulation flex-shrink-0 whitespace-nowrap ml-2"
           title="Copy session link"
+          aria-label="Copy session link"
         >
           {copied ? (
             <>
-              <Check className="w-3 h-3" />
-              Copied!
+              <Check className="w-3 h-3 md:w-3 md:h-3" />
+              <span>Copied!</span>
             </>
           ) : (
             <>
-              <Copy className="w-3 h-3" />
-              Copy Link
+              <Copy className="w-3 h-3 md:w-3 md:h-3" />
+              <span>Copy Link</span>
             </>
           )}
         </button>
@@ -155,57 +193,61 @@ export function SessionManager({
     );
   }
 
+  // Show join/create modal when no session is active
   return (
     <>
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#2a2a2a] rounded-lg shadow-xl max-w-md w-full mx-4 border border-[#333333]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#2a2a2a] rounded-lg shadow-xl max-w-md w-full border border-[#333333] max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#333333]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#9c27b0] flex items-center justify-center">
-                  <Users className="w-5 h-5 text-white" />
+            <div className="flex items-center justify-between p-3 md:p-4 border-b border-[#333333]">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-[#9c27b0] flex items-center justify-center">
+                  <Users className="w-4 h-4 md:w-5 md:h-5 text-white" />
                 </div>
-                <h2 className="text-lg font-semibold text-[#e0e0e0]">
-                  {sessionId ? "Join Session" : "Start Session"}
+                <h2 className="text-base md:text-lg font-semibold text-[#e0e0e0]">
+                  Start Session
                 </h2>
               </div>
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-4">
-              <p className="text-[#9e9e9e] text-sm">
-                {sessionId
-                  ? "Join an existing chat session by entering the session ID, or create a new one."
-                  : "Create a new group chat session or join an existing one."}
+            <div className="p-4 md:p-6 space-y-4">
+              <p className="text-[#9e9e9e] text-xs md:text-sm">
+                Create a new group chat session or join an existing one.
               </p>
 
               <div className="space-y-3">
                 <button
-                  onClick={createSession}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#9c27b0] hover:bg-[#7b1fa2] text-white font-medium rounded-lg transition-colors"
+                  onClick={() => setShowCreateDialog(true)}
+                  disabled={isCreating}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 md:py-3 bg-[#9c27b0] hover:bg-[#7b1fa2] text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-sm md:text-base"
                 >
-                  <Plus className="w-5 h-5" />
                   Create New Session
                 </button>
 
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Hash className="w-5 h-5 text-[#9e9e9e]" />
+                    <HashIcon className="w-4 h-4 md:w-5 md:h-5 text-[#9e9e9e]" />
                   </div>
                   <input
                     type="text"
                     value={newSessionId}
                     onChange={(e) => setNewSessionId(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newSessionId.trim()) {
+                        handleJoinSession();
+                      }
+                    }}
                     placeholder="Enter session ID to join"
-                    className="w-full pl-10 pr-4 py-3 bg-[#1e1e1e] border border-[#333333] rounded-lg text-[#e0e0e0] placeholder-[#9e9e9e] focus:outline-none focus:ring-2 focus:ring-[#9c27b0] focus:border-transparent transition-all font-mono text-sm"
+                    className="w-full pl-9 md:pl-10 pr-4 py-2.5 md:py-3 bg-[#1e1e1e] border border-[#333333] rounded-lg text-[#e0e0e0] placeholder-[#9e9e9e] focus:outline-none focus:ring-2 focus:ring-[#9c27b0] focus:border-transparent transition-all font-mono text-xs md:text-sm"
                   />
                 </div>
 
                 <button
-                  onClick={joinSession}
-                  disabled={!newSessionId.trim()}
-                  className="w-full px-4 py-3 bg-[#333333] hover:bg-[#2a2a2a] text-[#e0e0e0] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleJoinSession}
+                  disabled={!newSessionId.trim() || isCreating}
+                  className="w-full px-4 py-2.5 md:py-3 bg-[#333333] hover:bg-[#2a2a2a] text-[#e0e0e0] font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-sm md:text-base"
                 >
                   Join Session
                 </button>
@@ -214,6 +256,13 @@ export function SessionManager({
           </div>
         </div>
       )}
+
+      {/* Create Session Dialog */}
+      <CreateSessionDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onCreate={handleCreateSession}
+      />
     </>
   );
 }

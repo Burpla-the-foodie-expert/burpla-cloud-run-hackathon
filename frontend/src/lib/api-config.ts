@@ -28,27 +28,41 @@ export const API_CONFIG = {
 
   // API endpoints (matching backend FastAPI routes from main.py)
   // All endpoints are now proxied through /api/[...path] catch-all route
+  // Backend uses router prefixes: /chat, /session, /user
   ENDPOINTS: {
     // Root and health
     ROOT: "/", // GET - API info and documentation links
     HEALTH: "/health", // GET - Health check endpoint
 
-    // Conversation management
-    CONVO_INIT: "/convo_init", // GET - Get all conversations for a user (requires user_id query param)
-    GET_SESSION: "/get_session", // GET - Get conversation session by session_id
-    GET_USER_INFO: "/get_user_info", // GET - Get user information by user_id
-    GET_SESSION_USERS_INFO: "/get_session_users_info", // GET - Get all users in a session
+    // Authentication
+    AUTHENTICATION: "/authentication", // POST - Authenticate user by gmail
 
-    // Messaging
-    SENT: "/sent", // POST - Send message to agent and wait for response
+    // Session management (prefix: /session)
+    SESSION_GET_ALL: "/session/get_all", // GET - Get all conversations for a user (requires user_id query param)
+    SESSION_GET: "/session/get", // GET - Get conversation session by session_id
+    SESSION_GET_USERS_INFO: "/session/get_users_info", // GET - Get all users in a session
+    SESSION_CREATE: "/session/create", // POST - Create a new session or join an existing one
+    SESSION_UPDATE: "/session/update", // POST - Update session name and/or member list
+    SESSION_DELETE: "/session/delete", // DELETE - Delete a conversation session
 
-    // Voting
-    VOTE: "/vote", // POST - Record a vote for a restaurant (requires session_id, user_id, message_id, vote_option_id, is_vote_up query params)
+    // User management (prefix: /user)
+    USER_GET: "/user/get", // GET - Get user information by user_id
+    USER_UPDATE: "/user/update", // POST - Update user information
+    USER_ADD: "/user/add", // POST - Add a new user to the database
 
-    // Maps
-    CREATE_MARKERS: "/create_markers", // POST - Create map markers for restaurants and users
+    // Chat operations (prefix: /chat)
+    CHAT_SENT: "/chat/sent", // POST - Send message to agent and wait for response
+    CHAT_VOTE: "/chat/vote", // POST - Record a vote for a restaurant (requires session_id, user_id, message_id, vote_option_id, is_vote_up query params)
+    CHAT_CREATE_MARKERS: "/chat/create_markers", // POST - Create map markers for restaurants and users
 
-    // Legacy endpoints (for backward compatibility)
+    // Legacy endpoints (for backward compatibility - deprecated)
+    CONVO_INIT: "/session/get_all", // GET - Legacy alias for SESSION_GET_ALL
+    GET_SESSION: "/session/get", // GET - Legacy alias for SESSION_GET
+    GET_USER_INFO: "/user/get", // GET - Legacy alias for USER_GET
+    GET_SESSION_USERS_INFO: "/session/get_users_info", // GET - Legacy alias for SESSION_GET_USERS_INFO
+    SENT: "/chat/sent", // POST - Legacy alias for CHAT_SENT
+    VOTE: "/chat/vote", // POST - Legacy alias for CHAT_VOTE
+    CREATE_MARKERS: "/chat/create_markers", // POST - Legacy alias for CHAT_CREATE_MARKERS
     INIT: "/init", // GET - Legacy endpoint
     CONVO: "/convo", // POST - Legacy endpoint
   },

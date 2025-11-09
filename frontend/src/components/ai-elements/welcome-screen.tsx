@@ -17,20 +17,77 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
     if (session?.user) {
       // User is signed in with Google
       const userName = session.user.name || session.user.email?.split("@")[0] || "User";
-      localStorage.setItem("userName", userName);
-      localStorage.setItem("userEmail", session.user.email || "");
-      localStorage.setItem("userInitialized", "true");
+      const userEmail = session.user.email || "";
 
-      // Check for stored location
-      const storedLocation = localStorage.getItem("userLocation");
-      const location = storedLocation ? JSON.parse(storedLocation) : null;
+      // Authenticate with backend and get/create user
+      const authenticateUser = async () => {
+        try {
+          const response = await fetch("/api/authentication", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              gmail: userEmail,
+              name: userName,
+            }),
+          });
 
-      // Complete initialization with Google user data
-      onComplete({
-        name: userName,
-        location,
-        email: session.user.email || undefined,
-      });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.is_authenticated && data.user_id) {
+              // Store backend user_id
+              localStorage.setItem("userId", data.user_id);
+              localStorage.setItem("userName", userName);
+              localStorage.setItem("userEmail", userEmail);
+              localStorage.setItem("userInitialized", "true");
+
+              // Check for stored location
+              const storedLocation = localStorage.getItem("userLocation");
+              const location = storedLocation ? JSON.parse(storedLocation) : null;
+
+              // Complete initialization with Google user data
+              onComplete({
+                name: userName,
+                location,
+                email: userEmail || undefined,
+              });
+            } else {
+              console.error("Authentication failed:", data);
+            }
+          } else {
+            console.error("Failed to authenticate with backend");
+            // Fallback: still initialize with local data
+            localStorage.setItem("userName", userName);
+            localStorage.setItem("userEmail", userEmail);
+            localStorage.setItem("userInitialized", "true");
+
+            const storedLocation = localStorage.getItem("userLocation");
+            const location = storedLocation ? JSON.parse(storedLocation) : null;
+
+            onComplete({
+              name: userName,
+              location,
+              email: userEmail || undefined,
+            });
+          }
+        } catch (error) {
+          console.error("Error authenticating user:", error);
+          // Fallback: still initialize with local data
+          localStorage.setItem("userName", userName);
+          localStorage.setItem("userEmail", userEmail);
+          localStorage.setItem("userInitialized", "true");
+
+          const storedLocation = localStorage.getItem("userLocation");
+          const location = storedLocation ? JSON.parse(storedLocation) : null;
+
+          onComplete({
+            name: userName,
+            location,
+            email: userEmail || undefined,
+          });
+        }
+      };
+
+      authenticateUser();
     }
   }, [session, onComplete]);
 
@@ -49,8 +106,18 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
         // The error page will handle it gracefully
       }
 
+      // Extract session parameter from current URL if present
+      const url = new URL(window.location.href);
+      const sessionParam = url.searchParams.get("session");
+
+      // Build clean callback URL with only the session parameter if it exists
+      const baseUrl = `${window.location.origin}${window.location.pathname}`;
+      const callbackUrl = sessionParam
+        ? `${baseUrl}?session=${sessionParam}`
+        : baseUrl;
+
       await signIn("google", {
-        callbackUrl: window.location.href,
+        callbackUrl,
         redirect: true,
       });
     } catch (error: any) {
@@ -68,7 +135,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
             <Sparkles className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">
-            Welcome to AI Chat
+            Welcome to Burpla
           </h1>
           <p className="text-[#72767d] text-sm">
             Sign in with Google to get started

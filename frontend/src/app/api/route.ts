@@ -15,20 +15,35 @@ export async function GET() {
       health: "/api/health",
       docs: `${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}/docs`,
 
-      // Conversation management
-      convoInit: "/api/convo_init?user_id=user_001",
-      getSession: "/api/get_session?session_id=session_001",
-      getUserInfo: "/api/get_user_info?user_id=user_001",
-      getSessionUsersInfo: "/api/get_session_users_info?session_id=session_001",
+      // Authentication
+      authentication: "/api/authentication (POST)",
 
-      // Messaging
-      sent: "/api/sent (POST)",
+      // Session management
+      sessionGetAll: "/api/session/get_all?user_id=user_001",
+      sessionGet: "/api/session/get?session_id=session_001",
+      sessionGetUsersInfo: "/api/session/get_users_info?session_id=session_001",
+      sessionCreate: "/api/session/create (POST)",
+      sessionUpdate: "/api/session/update (POST)",
+      sessionDelete: "/api/session/delete (DELETE)",
 
-      // Voting
-      vote: "/api/vote (POST with query params)",
+      // User management
+      userGet: "/api/user/get?user_id=user_001",
+      userUpdate: "/api/user/update (POST)",
+      userAdd: "/api/user/add (POST)",
 
-      // Maps
-      createMarkers: "/api/create_markers (POST)",
+      // Chat operations
+      chatSent: "/api/chat/sent (POST)",
+      chatVote: "/api/chat/vote (POST with query params)",
+      chatCreateMarkers: "/api/chat/create_markers (POST)",
+
+      // Legacy endpoints (deprecated, use new endpoints above)
+      convoInit: "/api/session/get_all?user_id=user_001",
+      getSession: "/api/session/get?session_id=session_001",
+      getUserInfo: "/api/user/get?user_id=user_001",
+      getSessionUsersInfo: "/api/session/get_users_info?session_id=session_001",
+      sent: "/api/chat/sent (POST)",
+      vote: "/api/chat/vote (POST with query params)",
+      createMarkers: "/api/chat/create_markers (POST)",
 
       // Legacy endpoints (still available)
       init: "/api/init",

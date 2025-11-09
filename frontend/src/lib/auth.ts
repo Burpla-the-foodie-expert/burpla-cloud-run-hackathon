@@ -49,6 +49,19 @@ export const authOptions: NextAuthOptions = {
       // Allow all Google sign-ins
       return true;
     },
+    async redirect({ url, baseUrl }) {
+      // Handle redirect after sign-in
+      // If url is a relative URL, make it absolute
+      if (url.startsWith("/")) {
+        return `${baseUrl}${url}`;
+      }
+      // If url is on the same origin, allow it
+      if (new URL(url).origin === baseUrl) {
+        return url;
+      }
+      // Otherwise, redirect to base URL
+      return baseUrl;
+    },
     async session({ session, token }) {
       // Add user ID and email to session
       if (session.user) {
