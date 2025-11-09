@@ -35,7 +35,9 @@ class UserManager:
                 random_users = [
                     ("user_001", "Huy Bui", "williamhuybui@gmail.com", "Vietnamese noodle, Bun Bo Hue", "12315 Churchill Downs Dr, TX 77047"),
                     ("user_002", "Huy Nguyen", "huynguyen.me@gmail.com", "Pho, springroll", "11815 catrose ln, Cypress TX 77429"),
-                    ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "823 Malone St, Houston, TX 77007")
+                    ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "823 Malone St, Houston, TX 77007"),
+                    ("user_004", "Bing", "bingcello@gmail.com", "Fast food", "2103 Lyons Ave Building 2, Houston, TX 77020"),
+                    ("user_005", "Nam Truong", "quanhnamlamruong3@gmail.com", "Everything", "301 8th St, Galveston, TX 77555"),
                 ]
 
                 cursor.executemany(f"""

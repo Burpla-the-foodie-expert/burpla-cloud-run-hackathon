@@ -68,6 +68,19 @@ class SessionManager:
             """, (member_id_list, datetime.now().isoformat(), session_id))
             conn.commit()
 
+    def get_owner_id(self, session_id):
+        """Retrieves the owner_id of a session from the database by session_id."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                SELECT owner_id
+                FROM {self.table_name}
+                WHERE session_id = ?
+            """, (session_id,))
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+            return None
     #Change name and member list
     def update_session(self, session_id, session_name=None, member_id_list=None):
         """Updates the session_name and/or member_id_list for an existing session."""

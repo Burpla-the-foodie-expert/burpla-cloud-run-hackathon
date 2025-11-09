@@ -49,7 +49,7 @@ class ChatManager:
                 VALUES (?, ?, ?, ?, ?)
             """, (session_id, user_id, content, message_id, current_time))
             conn.commit()
-
+        
     def load_chat_history(self, session_id):
         """Loads the chat history for a given session ID. If not found, creates a new session with a bot message."""
         with sqlite3.connect(self.db_path) as conn:
