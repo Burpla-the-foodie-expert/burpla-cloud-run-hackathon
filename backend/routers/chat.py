@@ -85,9 +85,6 @@ async def vote_card(
                 import traceback
                 logger.error(traceback.format_exc())
 
-            # Update session last updated timestamp
-            convo_manager.update_last_updated(session_id)
-
             logger.info(f"User {user_name} ({user_id}) voted for {restaurant_name} in session {session_id}")
 
         return {"status": "Vote recorded successfully"}
