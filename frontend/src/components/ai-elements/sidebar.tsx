@@ -473,17 +473,17 @@ export function Sidebar({
           )}
 
           {isLoading ? (
-            <div className="px-2 py-4 text-center">
+            <div key="loading-sessions" className="px-2 py-4 text-center">
               <div className="text-xs text-[#9e9e9e]">Loading sessions...</div>
             </div>
           ) : sessions.length === 0 ? (
-            <div className="px-2 py-4 text-center">
+            <div key="no-sessions" className="px-2 py-4 text-center">
               <div className="text-xs text-[#9e9e9e] mb-2">
                 No sessions found
               </div>
             </div>
           ) : filteredAndSortedSessions.length === 0 ? (
-            <div className="px-2 py-4 text-center">
+            <div key="no-search-results" className="px-2 py-4 text-center">
               <div className="text-xs text-[#9e9e9e] mb-2">
                 No sessions match your search
               </div>
