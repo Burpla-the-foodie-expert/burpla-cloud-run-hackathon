@@ -8,13 +8,13 @@ from db_services.user import UserManager
 from db_services.session import SessionManager
 from fastapi.responses import Response
 from tools.google_map import plot_named_locations_googlemap
-from base_models.base_models import CreateSessionRequest, UpdateSessionRequest, JoinSessionRequest
+from base_models.db_models import CreateSessionRequest, UpdateSessionRequest, JoinSessionRequest
 import logging
 logger = logging.getLogger(__name__)
 
 user_manager = UserManager()
 chat_manager = ChatManager()
-convo_manager = SessionManager()
+session_manager = SessionManager()
 
 router = APIRouter(
     prefix="/session",
@@ -26,16 +26,16 @@ async def get_all_conversations(user_id: str = Query(..., example="user_001")):
     """Retrieve all available conversations on application startup based on user ID
     Available Id: user_001, user_002, user_003
     """
-    if not convo_manager:
+    if not session_manager:
         raise HTTPException(status_code=503, detail="Database service unavailable")
-    convos = convo_manager.get_all(user_id)
+    convos = session_manager.get_all(user_id)
     return convos
 
 @router.get("/get")
 async def get_conversation_session(session_id: str = Query(..., example="session_003")):
     """Retrieve conversation session by session ID, filtered to only include messages from session members"""
     # First check if session exists in convo table
-    convo = convo_manager.get(session_id)
+    convo = session_manager.get(session_id)
 
     # Get all messages for the session
     all_messages = chat_manager.load_chat_history(session_id)
@@ -84,7 +84,7 @@ async def get_conversation_session(session_id: str = Query(..., example="session
 @router.get("/get_users_info")
 async def get_session_users_info(session_id: str = Query(..., example="session_001")):
     """Retrieve user information for all users in a conversation session"""
-    convo = convo_manager.get(session_id)
+    convo = session_manager.get(session_id)
 
     if convo:
         # Session exists in convo table, use member_id_list
@@ -168,7 +168,7 @@ async def create_or_join_session(request: CreateSessionRequest):
 
     #Create new session
     # member_list is already a comma-separated string, don't join it again
-    convo_manager.add_session(
+    session_manager.add_session(
         session_id=session_id,
         session_name=session_name,
         owner_id=owner_id,
@@ -185,8 +185,6 @@ async def create_or_join_session(request: CreateSessionRequest):
     }
 
 #Update session name, and list of member
-
-
 @router.post("/join")
 async def join_session(request: JoinSessionRequest):
     """Join an existing session by adding user to member_id_list"""
@@ -194,7 +192,7 @@ async def join_session(request: JoinSessionRequest):
     user_id = request.user_id
 
     # Check if session exists
-    convo = convo_manager.get(session_id)
+    convo = session_manager.get(session_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation session not found")
 
@@ -207,7 +205,7 @@ async def join_session(request: JoinSessionRequest):
         )
 
     # Add user to session
-    success = convo_manager.join_session(session_id, user_id)
+    success = session_manager.join_session(session_id, user_id)
     if not success:
         raise HTTPException(
             status_code=500,
@@ -223,7 +221,7 @@ async def join_session(request: JoinSessionRequest):
 @router.post("/update")
 async def update_session_info(request: UpdateSessionRequest):
     """Update session name and/or member list for an existing session"""
-    convo = convo_manager.get(request.session_id)
+    convo = session_manager.get(request.session_id)
     if not convo:
         return HTTPException(status_code=404, detail="Conversation session not found")
 
@@ -237,7 +235,7 @@ async def update_session_info(request: UpdateSessionRequest):
     # If it's already a string, use it as-is (don't join it again)
 
     # Update session
-    convo_manager.update_session(
+    session_manager.update_session(
         session_id=session_id,
         session_name=session_name,
         member_id_list=member_id_list,
@@ -256,7 +254,7 @@ async def delete_session(
     """Delete a conversation session by session ID.
     Only the owner or a member of the session can delete it.
     """
-    convo = convo_manager.get(session_id)
+    convo = session_manager.get(session_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation session not found")
 
@@ -271,7 +269,7 @@ async def delete_session(
         )
 
     # Delete the conversation session and associated chat messages
-    convo_manager.delete(session_id)
+    session_manager.delete(session_id)
     chat_manager.delete_chat_session(session_id)
 
     return {

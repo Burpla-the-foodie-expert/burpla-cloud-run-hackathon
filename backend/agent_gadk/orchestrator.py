@@ -9,9 +9,13 @@ from config import GEMINI_PRO, GEMINI_FLASH
 from agent_gadk.tools import distance_matrix, google_places_text_search
 from google.adk.sessions import InMemorySessionService
 
+
 warnings.filterwarnings("ignore")
 
 load_dotenv(override=True)
+gen_cfg = types.GenerateContentConfig(
+    temperature=0.1,
+)
 
 root_agent = Agent(
     name="root_agent",
@@ -72,6 +76,7 @@ root_agent = Agent(
         - Don't make up any information. If unsure, can ask the user for clarification.
         """,
     tools=[google_places_text_search, distance_matrix],
+    generate_content_config=gen_cfg,
     sub_agents=[pipeline_vote_agent, pipeline_recommendation_agent],
 )
 
@@ -135,6 +140,7 @@ async def run_conversation(
         if response.startswith("{") or response.startswith("["):
             response = response.replace("\\", "\\\\")
             response = json.loads(response)
+            response['message_id'] = f"msm_{str(uuid.uuid4())}"
             response = str(response)
         return response
 

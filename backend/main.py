@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from db_services.chat import ChatManager
 from db_services.user import UserManager
 from db_services.session import SessionManager
-from base_models.base_models import AuthenticationRequest
+from base_models.db_models import AuthenticationRequest
 from routers import chat, user, session
 
 load_dotenv(override=True)

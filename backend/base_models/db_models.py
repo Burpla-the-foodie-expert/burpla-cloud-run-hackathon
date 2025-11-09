@@ -5,7 +5,7 @@ import uuid
 
 class ConvoRequest(BaseModel):
     """Request to retrieve a specific conversation"""
-    convo_id: int = Field(default=0)
+    session_id: int = Field(default=0)
 
 class Conversation(BaseModel):
     """Conversation details with message history"""

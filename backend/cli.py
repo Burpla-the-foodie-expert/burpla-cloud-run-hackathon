@@ -4,7 +4,7 @@ from agent_gadk.orchestrator import run_conversation
 from db_services.chat import ChatManager
 
 async def main():
-    user_id = str(uuid.uuid4())
+    user_id = "user_001"
     session_id = str(uuid.uuid4())
     session_id = "session_001"
     chat_manager = ChatManager()

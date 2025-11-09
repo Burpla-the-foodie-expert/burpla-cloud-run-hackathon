@@ -4,13 +4,13 @@ from agent_gadk.orchestrator import run_conversation
 from db_services.chat import ChatManager
 from db_services.user import UserManager
 from db_services.session import SessionManager
-from base_models.base_models import UserInfo
+from base_models.db_models import UserInfo
 import logging
 logger = logging.getLogger(__name__)
 
 user_manager = UserManager()
 chat_manager = ChatManager()
-convo_manager = SessionManager()
+session_manager = SessionManager()
 
 router = APIRouter(
     prefix="/user",

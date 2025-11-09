@@ -9,7 +9,7 @@ from db_services.user import UserManager
 from db_services.session import SessionManager
 from fastapi.responses import Response
 from tools.google_map import plot_named_locations_googlemap
-from base_models.base_models import UserMessage, AgentMessage, CreateMarkersRequest
+from base_models.db_models import UserMessage, AgentMessage, CreateMarkersRequest
 
 import logging
 
