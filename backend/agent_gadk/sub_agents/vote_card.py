@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from base_models.agent_models import VoteResponse
 from google.genai import types
+from agent_gadk.tools import google_places_get_id
 
 load_dotenv(override=True)
 
@@ -40,21 +41,23 @@ gen_cfg = types.GenerateContentConfig(
 extract_id_agent = Agent(
     name="extract_id_agent",
     model=GEMINI_FLASH,
-    description="Extracts restaurant/place IDs from previous conversation messages.",
+    description="Extracts restaurant/place IDs or retrieves them by name if missing.",
     generate_content_config=gen_cfg,
+    tools=[google_places_get_id],
     instruction="""
-        Look through all previous messages in the conversation history and extract all restaurant_id or place_id values.
-        Return only a valid JSON list of strings.
+        Extract all restaurant/place IDs (restaurant_id, place_id) from previous messages.
+        If IDs are missing but restaurant names appear, call `google_places_get_id` to retrieve them.
 
-        Example valid output:
+        Return a JSON list of unique place_id strings, e.g.:
         ["ChIJ123abc456", "ChIJ789def012"]
 
         Rules:
-        - Do not include duplicates.
-        - Do not include commentary or code fences.
-        - If no IDs found, return [].
+        - No duplicates or guesses.
+        - No text, markdown, or explanations.
+        - Return [] if nothing found.
     """,
 )
+
 
 validate_vote_agent = Agent(
     name="validate_vote_agent",

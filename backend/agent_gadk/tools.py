@@ -148,3 +148,49 @@ def generate_vote(place_ids: List[str]) -> dict:
     }
 
     return res
+
+
+def google_places_get_id(restaurant_name: str) -> dict:
+    """
+    Retrieves the Google Place ID for a given restaurant name using the Places API.
+
+    Args:
+        restaurant_name (str): The name of the restaurant to search for.
+
+    Returns:
+        dict: A dictionary containing either the place ID or an error message.
+              Example: {"restaurant_name": "Hoàng Gia Quán", "restaurant_id": "ChIJSQLB2undQIYR65aaBQDpozQ"}
+    """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    api_url = "https://places.googleapis.com/v1/places:searchText"
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "places.id,places.displayName"
+    }
+    payload = {"textQuery": restaurant_name}
+
+    try:
+        response = requests.post(api_url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        places = data.get("places", [])
+
+        if not places:
+            return {"error": f"No places found for '{restaurant_name}'"}
+
+        # Get the first matching place
+        place = places[0]
+        place_id = place.get("id", None)
+
+        if not place_id:
+            return {"error": f"Place ID not found for '{restaurant_name}'"}
+
+        return {
+            "restaurant_name": place.get("displayName", {}).get("text", restaurant_name),
+            "restaurant_id": place_id
+        }
+
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Places API Request failed: {e}"}

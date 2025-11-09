@@ -38,6 +38,7 @@ class UserManager:
                     ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "823 Malone St, Houston, TX 77007"),
                     ("user_004", "Bing", "bingcello@gmail.com", "Fast food", "2103 Lyons Ave Building 2, Houston, TX 77020"),
                     ("user_005", "Nam Truong", "quanhnamlamruong3@gmail.com", "Everything", "301 8th St, Galveston, TX 77555"),
+                    ("user_006", "Ceiba", "cei3pentandra@gmail.com", "Everything", "13710 Eldridge Valley Dr. Houston, TX 77083"),
                 ]
 
                 cursor.executemany(f"""

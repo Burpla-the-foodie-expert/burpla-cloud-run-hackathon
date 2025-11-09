@@ -8,7 +8,8 @@ from agent_gadk.sub_agents.recommendation_card import pipeline_recommendation_ag
 from config import GEMINI_PRO, GEMINI_FLASH
 from agent_gadk.tools import distance_matrix, google_places_text_search
 from google.adk.sessions import InMemorySessionService
-
+import asyncio, re, json, uuid, traceback
+import asyncio, re, json, uuid, traceback
 
 warnings.filterwarnings("ignore")
 
@@ -110,43 +111,67 @@ async def call_agent_async(
     return final_response_text
 
 
+def _looks_like_json(text: str) -> bool:
+    if not isinstance(text, str):
+        return False
+    t = text.lstrip().lower()
+    return "```json" in t or t.startswith("{") or t.startswith("[")
+
+def _strip_json_fences(text: str) -> str:
+    # Remove single-line or multi-line ```json ... ``` fences safely
+    return re.sub(r"^\s*```json\s*|\s*```\s*$", "", text.strip(), flags=re.IGNORECASE)
+
 async def run_conversation(
     query: str,
     app_name: str = "burpla",
     user_id: str = "something",
     session_id: str = "something",
 ):
-    try:
-        session_key = (app_name, session_id)
-        if session_key not in created_sessions:
-            await session_service.create_session(
-                app_name=app_name, user_id=user_id, session_id=session_id
-            )
-            created_sessions.add(session_key)
-
-        runner_agent_team = Runner(
-            agent=root_agent, app_name=app_name, session_service=session_service
+    session_key = (app_name, session_id)
+    if session_key not in created_sessions:
+        await session_service.create_session(
+            app_name=app_name, user_id=user_id, session_id=session_id
         )
+        created_sessions.add(session_key)
 
-        response = await call_agent_async(
-            query=query,
-            runner=runner_agent_team,
-            user_id=user_id,
-            session_id=session_id,
-        )
+    runner_agent_team = Runner(
+        agent=root_agent, app_name=app_name, session_service=session_service
+    )
 
-        if "```json" in response:
-            response = re.sub(r"^```json\s*|\s*```$", "", response.strip())
-        if response.startswith("{") or response.startswith("["):
-            response = response.replace("\\", "\\\\")
-            response = json.loads(response)
-            response['message_id'] = f"msm_{str(uuid.uuid4())}"
-            response = str(response)
+    # First run
+    response = await call_agent_async(
+        query=query,
+        runner=runner_agent_team,
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+    # If it doesn't look like JSON, return as-is (no retries)
+    if not _looks_like_json(response):
         return response
 
-    except Exception as e:
-        print(f"  ❌ Error in run_conversation: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-        raise
+    # It looks like JSON → try up to 3 attempts to parse valid JSON
+    max_retries = 3
+    last_raw = response
+    for attempt in range(1, max_retries + 1):
+        try:
+            candidate = _strip_json_fences(last_raw)
+            # Try to parse
+            data = json.loads(candidate)
+            # Attach message_id and return as JSON string
+            if isinstance(data, dict):
+                data["message_id"] = f"msm_{uuid.uuid4()}"
+            return json.dumps(data)
+        except Exception as e:
+            print(f"⚠️ JSON parse failed (attempt {attempt}/{max_retries}): {e}")
+            if attempt == max_retries:
+                # Give back the last raw response if parsing never succeeded
+                return last_raw
+            # Re-run the agent only because it looked like JSON but failed to parse
+            await asyncio.sleep(0.75)
+            last_raw = await call_agent_async(
+                query=query,
+                runner=runner_agent_team,
+                user_id=user_id,
+                session_id=session_id,
+            )
