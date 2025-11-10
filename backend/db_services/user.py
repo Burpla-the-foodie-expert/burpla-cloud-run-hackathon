@@ -33,12 +33,12 @@ class UserManager:
             if count == 0:
                 # Add 3 random users
                 random_users = [
-                    ("user_001", "Huy Bui", "williamhuybui@gmail.com", "Vietnamese noodle, Bun Bo Hue", "12315 Churchill Downs Dr, TX 77047"),
-                    ("user_002", "Huy Nguyen", "huynguyen.me@gmail.com", "Pho, springroll", "11815 catrose ln, Cypress TX 77429"),
-                    ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "823 Malone St, Houston, TX 77007"),
+                    ("user_001", "Huy Bui", "williamhuybui@gmail.com", "Vietnamese noodle, Bun Bo Hue", "3519 Liberty Dr. Pearland, TX 77581"),
+                    ("user_002", "Huy Nguyen", "huynguyen.me@gmail.com", "Pho, springroll", "17515 Swansbury Dr, Cypress, TX 77429"),
+                    ("user_003", "Weber Chen", "weberchen85@gmail.com", "Beijing duck, dumbling", "6565 W Loop S #300, Bellaire, TX 77401"),
                     ("user_004", "Bing", "bingcello@gmail.com", "Fast food", "2103 Lyons Ave Building 2, Houston, TX 77020"),
                     ("user_005", "Nam Truong", "quanhnamlamruong3@gmail.com", "Everything", "301 8th St, Galveston, TX 77555"),
-                    ("user_006", "Ceiba", "cei3pentandra@gmail.com", "Everything", "13710 Eldridge Valley Dr. Houston, TX 77083"),
+                    ("user_006", "Ceiba", "cei3pentandra@gmail.com", "Everything", "13201 Bellaire Blvd, Houston, TX 77083"),
                 ]
 
                 cursor.executemany(f"""
@@ -57,7 +57,7 @@ class UserManager:
                 VALUES (?, ?, ?, ?, ?)
             """, (user_id, name, gmail, preferences, location))
             conn.commit()
-
+    
     def get_user(self, user_id):
         """Retrieves a user from the database by user_id."""
         with sqlite3.connect(self.db_path) as conn:

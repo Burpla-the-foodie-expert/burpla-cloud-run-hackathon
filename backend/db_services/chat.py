@@ -86,6 +86,7 @@ class ChatManager:
             # Note: We don't automatically migrate these as we can't determine which user they belong to
             # The validation in save_chat_message will ensure all new messages use valid user_ids
 
+
     def get_invalid_user_ids(self):
         """Get a list of invalid user_ids in chat_sessions that don't exist in users table."""
         with sqlite3.connect(self.db_path) as conn:
@@ -188,7 +189,7 @@ class ChatManager:
                 }
                 for row in rows
             ]
-
+    
     def initialize_chat_session(self, session_id):
         """Initializes a new chat session with a bot welcome message.
         Only call this when explicitly creating a new session."""

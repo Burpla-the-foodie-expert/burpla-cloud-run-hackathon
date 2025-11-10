@@ -21,7 +21,7 @@ gen_cfg = types.GenerateContentConfig(
 
 root_agent = Agent(
     name="root_agent",
-    model=GEMINI_FLASH,
+    model=GEMINI_PRO,
     description="Your name is Burpla. The main coordinator agent. Handles places-to-eat request, distance request, web search, and delegate vote generation to specialists",
     instruction="""
         Your name is Burpla. You are the main Food Recommendation Agent coordinating a team.
@@ -82,7 +82,13 @@ root_agent = Agent(
     sub_agents=[pipeline_vote_agent, pipeline_recommendation_agent],
 )
 
-session_service = InMemorySessionService()
+# session_service = InMemorySessionService()
+
+from google.adk.sessions import DatabaseSessionService
+# Example using a local SQLite file:
+db_url = "sqlite:///./my_agent_data.db"
+session_service = DatabaseSessionService(db_url=db_url)\
+
 created_sessions = set()
 
 async def call_agent_async(

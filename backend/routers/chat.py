@@ -24,6 +24,24 @@ router = APIRouter(
     tags=["chat"],
 )
 
+def get_all_chat_history_agent_ready(self, session_id):
+    #User context
+    members = session_manager.get_member_list(session_id)
+    context = {"role": "system", "content": "User the user information for other preferences.\n User Information:\n"}
+
+    for user_id in members:
+        user_info = user_manager.get_user(user_id)
+        context += f"User Name: {user_info[1]}, Preferences: {user_info[3]}, Location: {user_info[4]}\n"
+
+    messages = chat_manager.load_chat_history(session_id)
+    agent_ready_history = []
+    for msg in messages:
+        agent_ready_history.append({
+            "role": msg["user_id"],
+            "content": msg["content"]
+        })
+    
+    return agent_ready_history
 
 @router.post("/vote")
 async def vote_card(

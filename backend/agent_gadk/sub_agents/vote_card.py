@@ -40,7 +40,7 @@ gen_cfg = types.GenerateContentConfig(
 
 extract_id_agent = Agent(
     name="extract_id_agent",
-    model=GEMINI_FLASH,
+    model=GEMINI_PRO,
     description="Extracts restaurant/place IDs or retrieves them by name if missing.",
     generate_content_config=gen_cfg,
     tools=[google_places_get_id],
@@ -61,9 +61,9 @@ extract_id_agent = Agent(
 
 validate_vote_agent = Agent(
     name="validate_vote_agent",
-    model=GEMINI_FLASH,
+    model=GEMINI_PRO,
     description="Calls generate_vote and ensures JSON validity. Retries until valid JSON is produced.",
-    instruction="""
+    instruction=f"""
         You are responsible for generating a valid voting card JSON.
         Use the tool 'generate_vote(place_ids=[...])' with the IDs you receive.
 
@@ -73,13 +73,8 @@ validate_vote_agent = Agent(
         3. If invalid, retry up to 3 times until it parses correctly.
         4. Return only the final JSON (no extra text, no code fences).
 
-        The JSON must match this schema:
-        {
-            "type": "vote_card",
-            "vote_options": [...],
-            "number_of_vote": 0,
-            "vote_user_id_list": []
-        }
+        The JSON must match this schema example:
+        {VoteResponse.model_json_schema()['example']}
     """,
     tools=[generate_vote],
     generate_content_config=gen_cfg,
