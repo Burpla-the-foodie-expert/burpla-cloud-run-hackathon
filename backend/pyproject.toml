@@ -1,27 +1,42 @@
-[tool.poetry]
+[project]
 name = "burpla-backend"
 version = "0.1.0"
 description = "Backend API for Burpla Cloud Run Hackathon"
-authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-packages = [{include = "cloud_hack_agent"}]
-
-[tool.poetry.dependencies]
-python = "^3.11"
-fastapi = "^0.118.2"
-uvicorn = {extras = ["standard"], version = "^0.35.0"}
-python-dotenv = "^1.0.0"
-google-genai = "^1.47.0"
-requests = "^2.31.0"
-googlemaps = "^4.10.0"
-pydantic = "^2.11.5"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-black = "^24.0.0"
-ruff = "^0.4.0"
+requires-python = ">=3.11"
+dependencies = [
+    "absolufy-imports==0.3.1",
+    "alembic==1.17.1",
+    "annotated-doc==0.0.3",
+    "annotated-types==0.7.0",
+    "anyio==4.11.0",
+    "fastapi==0.121.0",
+    "uvicorn==0.38.0",
+    "python-dotenv==1.2.1",
+    "google-genai==1.48.0",
+    "google-api-python-client==2.186.0",
+    "google-cloud-aiplatform==1.125.0",
+    "requests==2.32.5",
+    "googlemaps==4.10.0",
+    "pydantic==2.12.3",
+    "pydantic-settings==2.11.0",
+    "langchain-google-genai",
+    "langgraph",
+    "langserve[all]",
+    "langsmith",
+    "folium==0.20.0",
+    "SQLAlchemy==2.0.44",
+    "sqlalchemy-spanner==1.17.1",
+    "google-cloud-spanner==3.59.0",
+    "google-cloud-storage==3.5.0",
+    "google-cloud-logging==3.12.1",
+    "google-cloud-secret-manager==2.25.0",
+    "google-adk==1.18.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["agent_langchain", "agent_gadk", "base_models", "db_services", "routers", "tools"]
