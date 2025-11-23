@@ -1,0 +1,24 @@
+# PyreFly Configuration
+
+# Directories to type check
+source_directories = ["."]
+
+# Files or directories to exclude from checking
+exclude = [
+    "venv",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    ".git",
+    ".vscode"
+]
+
+# Python version to assume for type checking
+python_version = "3.11"
+
+# Platform to assume (linux, macos, windows)
+platform = "linux"
+
+# Strict mode settings (optional)
+# strict = true
