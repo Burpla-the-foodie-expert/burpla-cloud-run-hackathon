@@ -66,6 +66,33 @@ async def chat_stream(request: ChatRequest):
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+class UserMessage(BaseModel):
+    user_id: str
+    message: str
+    session_id: str
+    is_to_agent: bool = True
+
+import uuid
+
+@app.post("/chat/sent")
+async def chat_sent(request: UserMessage):
+    inputs = {"messages": [HumanMessage(content=request.message)]}
+    config = {"configurable": {"thread_id": request.session_id}}
+
+    # Invoke the agent
+    result = await agent.ainvoke(inputs, config=config)
+
+    # Extract the last message content
+    last_message = result["messages"][-1]
+    response_content = last_message.content
+
+    return {
+        "user_id": "bot",
+        "name": "Burpla",
+        "message": response_content,
+        "message_id": str(uuid.uuid4())
+    }
+
 
 def start():
     port = int(os.getenv("PORT", "8000"))

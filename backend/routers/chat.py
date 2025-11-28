@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Query, Body
 from google.genai import types
 import os, json, uuid
 from dotenv import load_dotenv
-from agent_gadk.orchestrator import run_conversation
+from agent_langchain.orchestrator import run_conversation
 from db_services.chat import ChatManager
 from db_services.user import UserManager
 from db_services.session import SessionManager
@@ -31,7 +31,7 @@ def get_all_chat_history_agent_ready(self, session_id):
 
     for user_id in members:
         user_info = user_manager.get_user(user_id)
-        context += f"User Name: {user_info[1]}, Preferences: {user_info[3]}, Location: {user_info[4]}\n"
+        context["content"] += f"User Name: {user_info[1]}, Preferences: {user_info[3]}, Location: {user_info[4]}\n"
 
     messages = chat_manager.load_chat_history(session_id)
     agent_ready_history = []
@@ -40,7 +40,7 @@ def get_all_chat_history_agent_ready(self, session_id):
             "role": msg["user_id"],
             "content": msg["content"]
         })
-    
+
     return agent_ready_history
 
 @router.post("/vote")
@@ -188,7 +188,7 @@ async def send_user_message(message: UserMessage):
             message=response,
             message_id=response_message_id,
         )
-    else: 
+    else:
         query_wrapper = f"""
             Note: THIS IS A NON-AGENT QUERY, DO NOT RESPOND TO THE USER.
 

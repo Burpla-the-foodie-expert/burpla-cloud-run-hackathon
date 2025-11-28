@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "start": "concurrently --kill-others-on-fail \"npm:dev:backend\" \"npm:dev:mobile\"",
     "dev": "concurrently --kill-others-on-fail \"npm:dev:backend\" \"npm:dev:frontend\"",
-    "dev:backend": "cd backend && poetry run uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:backend": "cd backend && PORT=8001 uv run python -m agent_langchain.server",
     "dev:frontend": "cd frontend && pnpm dev",
+    "dev:mobile": "cd mobile && npx expo start --port 8082",
     "install:all": "npm run install:backend && npm run install:frontend",
     "install:backend": "cd backend && poetry install",
     "install:frontend": "cd frontend && pnpm install"

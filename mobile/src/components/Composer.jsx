@@ -26,7 +26,7 @@ const Composer = ({ onSend }) => {
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
-            placeholder="Ask v0..."
+            placeholder="Enter chat"
             placeholderTextColor={Colors.textSecondary}
             value={text}
             onChangeText={setText}

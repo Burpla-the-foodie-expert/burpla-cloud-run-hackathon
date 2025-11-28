@@ -60,6 +60,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(chat.router)
 app.include_router(session.router)
 app.include_router(user.router)
+from gcs.websocket import router as ws_router
+app.include_router(ws_router)
 
 @app.get("/")
 async def root():
