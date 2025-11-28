@@ -5,6 +5,7 @@ import googlemaps
 from typing import List, Optional
 from langchain_core.tools import tool
 from dotenv import load_dotenv
+from googlemaps.distance_matrix import distance_matrix as get_distance_matrix
 
 load_dotenv(override=True)
 
@@ -24,7 +25,8 @@ def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> dic
     try:
         api_key = os.getenv("GOOGLE_API_KEY")
         gmaps = googlemaps.Client(key=api_key)
-        result = gmaps.distance_matrix(
+        result = get_distance_matrix(
+            gmaps,
             origins=[origin],
             destinations=[destination],
             mode=mode,
@@ -65,6 +67,11 @@ def google_places_text_search(text_query: str) -> dict:
         result = {"type": "recommendation", "options": []}
         places = response.json().get('places', [])
 
+        # Defensive check: Ensure options is a list
+        if not isinstance(result.get('options'), list):
+            print(f"WARNING: result['options'] was not a list: {type(result.get('options'))}. Resetting to empty list.")
+            result['options'] = []
+
         for place in places:
             photo_uri = None
             if place.get("photos"):
@@ -83,7 +90,12 @@ def google_places_text_search(text_query: str) -> dict:
                 'priceLevel': str(place.get('priceLevel', 'N/A')),
                 'map': place.get('googleMapsUri', 'N/A')
             }
-            result['options'].append(option)
+
+            # Double check before appending
+            if isinstance(result['options'], list):
+                result['options'].append(option)
+            else:
+                 print(f"ERROR: result['options'] became {type(result['options'])} unexpectedly. Cannot append.")
 
         return result
     except requests.exceptions.RequestException as e:

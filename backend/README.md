@@ -6,13 +6,16 @@ AI-powered food recommendation agent using Google ADK and Gemini.
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+uv sync
 
-# Start server
-python main.py
+# Start backend server
+uv run python main.py
+
+# Start agent server
+uv run start-agent
 
 # Test agent
-python cli.py
+uv run python cli.py
 ```
 
 ## Features
@@ -105,11 +108,11 @@ open http://localhost:8000/docs
 MIT
 
 # Main User flow
-1 Log in: Sign in with gmail 
-2 Sign up 
-3 Initialize convo based on user_id. /convo_init 
+1 Log in: Sign in with gmail
+2 Sign up
+3 Initialize convo based on user_id. /convo_init
 4 Click on session /get_session
 5 User go to chat and click sent /sent
-6 User click vote 
+6 User click vote
 
 

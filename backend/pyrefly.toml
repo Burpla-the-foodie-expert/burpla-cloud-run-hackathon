@@ -15,7 +15,7 @@ exclude = [
 ]
 
 # Python version to assume for type checking
-python_version = "3.11"
+python_version = "3.12"
 
 # Platform to assume (linux, macos, windows)
 platform = "linux"
