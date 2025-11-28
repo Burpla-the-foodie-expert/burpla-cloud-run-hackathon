@@ -6,6 +6,7 @@ from typing import List, Optional
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 from googlemaps.distance_matrix import distance_matrix as get_distance_matrix
+from config import config
 
 load_dotenv(override=True)
 
@@ -23,7 +24,7 @@ def distance_matrix(origin: str, destination: str, mode: str = 'driving') -> dic
         dict: A dictionary containing the distance matrix information or error message.
     """
     try:
-        api_key = os.getenv("GOOGLE_API_KEY")
+        api_key = config.google_api_key
         gmaps = googlemaps.Client(key=api_key)
         result = get_distance_matrix(
             gmaps,
@@ -48,7 +49,7 @@ def google_places_text_search(text_query: str) -> dict:
     Returns:
         dict: A dictionary containing the search results from the Places API with formatted options.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = config.google_api_key
     api_url = "https://places.googleapis.com/v1/places:searchText"
 
     field_mask = "places.id,places.displayName,places.formattedAddress,places.priceLevel,places.rating,places.userRatingCount,places.types,places.photos,places.googleMapsUri"
@@ -113,7 +114,7 @@ def generate_vote(place_ids: List[str]) -> dict:
     Returns:
         dict: A dictionary containing the voting options formatted for the frontend.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = config.google_api_key
     field_mask = "id,displayName,formattedAddress,location,rating,userRatingCount,photos,googleMapsUri,reviews"
 
     headers = {
@@ -177,7 +178,7 @@ def google_places_get_id(restaurant_name: str) -> dict:
     Returns:
         dict: A dictionary containing either the place ID or an error message.
     """
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = config.google_api_key
     api_url = "https://places.googleapis.com/v1/places:searchText"
 
     headers = {

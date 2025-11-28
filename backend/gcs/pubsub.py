@@ -38,10 +38,11 @@ class RedisPubSub(PubSubService):
     def unsubscribe(self, channel: str):
         self.pubsub.unsubscribe(channel)
 
+from config import config
+
 class GCPPubSub(PubSubService):
     def __init__(self):
-        _, project_id = google.auth.default()
-        self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT", project_id)
+        self.project_id = config.project_id
         self.topic_id = os.getenv("PUBSUB_TOPIC", "burpla-chat-messages")
 
         self.publisher = pubsub_v1.PublisherClient()
